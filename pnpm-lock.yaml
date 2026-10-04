@@ -9,7 +9,7 @@ importers:
   .:
     devDependencies:
       '@salesforce/cli':
-        specifier: ^2.144.6
+        specifier: 2.144.6
         version: 2.144.6(@types/node@26.1.1)(@types/react@18.3.31)(supports-color@8.1.1)
       oxfmt:
         specifier: 0.59.0
@@ -4077,7 +4077,7 @@ snapshots:
       '@salesforce/core': 8.32.5
       '@salesforce/kit': 3.2.6
       '@salesforce/ts-types': 2.0.12
-      '@salesforce/types': 1.7.1
+      '@salesforce/types': 1.8.0
       fast-levenshtein: 3.0.0
       fast-xml-parser: 5.10.1
       got: 11.8.6
@@ -4173,11 +4173,11 @@ snapshots:
 
   '@types/mute-stream@0.0.1':
     dependencies:
-      '@types/node': 20.19.43
+      '@types/node': 26.1.1
 
   '@types/mute-stream@0.0.4':
     dependencies:
-      '@types/node': 22.20.1
+      '@types/node': 26.1.1
 
   '@types/node@20.19.43':
     dependencies:

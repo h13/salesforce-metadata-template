@@ -39,7 +39,7 @@ jobs:
 
       - name: Run Salesforce Code Analyzer
         id: run-code-analyzer
-        uses: forcedotcom/run-code-analyzer@baf33de9311aa140dc288f1773513bff2df6b8d1 # v2.13.0
+        uses: forcedotcom/run-code-analyzer@318e7429b49b97904dc41f7acbd41003db403965 # v2.14.0
         with:
           run-arguments: --workspace . --view detail --output-file sfca_results.html --output-file sfca_results.json
           results-artifact-name: salesforce-code-analyzer-results

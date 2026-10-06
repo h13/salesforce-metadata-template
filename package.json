@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@salesforce/cli": "^2.144.6",
-    "oxfmt": "0.59.0",
+    "oxfmt": "0.72.0",
     "oxlint": "1.74.0"
   },
   "engines": {

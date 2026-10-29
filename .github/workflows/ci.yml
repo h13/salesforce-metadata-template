@@ -24,7 +24,7 @@ jobs:
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: '24'
+          node-version: '26'
           cache: pnpm
 
       - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4
@@ -61,7 +61,7 @@ jobs:
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: '24'
+          node-version: '26'
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

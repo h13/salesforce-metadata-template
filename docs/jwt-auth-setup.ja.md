@@ -33,6 +33,10 @@ openssl req -new -x509 -key server.key -out server.crt -days 365 \
 
 ## 2. Salesforce で Connected App を作成
 
+> **Note**: Connected App のメタデータは Metadata API で取得できない（Salesforce の制約）。
+> そのため `CI_Deploy` はこのリポジトリに含まれず、org 上で手動管理する。
+> 変更したときはこのドキュメントを更新して Git に記録を残す。
+
 ### Sandbox org で設定
 
 1. **設定** → クイック検索で「アプリケーションマネージャ」を検索

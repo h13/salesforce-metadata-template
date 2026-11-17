@@ -5,35 +5,16 @@
 #
 # IMPORTANT: When adding a new file to the template, add it here too.
 
-# CI/CD
-:!.github/workflows/ci.yml
-:!.github/workflows/deploy.yml
-:!.github/workflows/sync-template.yml
-
 # Build & tooling
 :!.oxlintrc.json
 :!.oxfmtrc.json
 :!.editorconfig
-:!.mise.toml
-:!package.json
 :!renovate.json
-
-# Salesforce
-#
-# .forceignore is deliberately NOT synced. Which managed packages an org has
-# installed differs per org, so the list of excluded prefixes is repository
-# specific. Syncing it would replace a downstream repository's real exclusions
-# with the commented-out skeleton in this template, and the next retrieve would
-# pull every managed package's metadata back into the repository.
 
 # Meta
 :!.templatesyncignore
-:!.gitignore
 :!.gitleaks.toml
-# Long form is required here: in the `:!` short form git keeps reading magic
-# signature characters after the `!`, and `_` is not one, so `:!_typos.toml`
-# dies with "Unimplemented pathspec magic '_'".
-:(exclude)_typos.toml
+:!:_typos.toml
 :!.markdownlint-cli2.yaml
 :!LICENSE
 

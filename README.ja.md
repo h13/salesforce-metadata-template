@@ -103,7 +103,7 @@ salesforce-metadata-template/
 │   ├── ci.yml                # PR バリデーション（dry-run deploy）
 │   └── deploy.yml            # push 時の自動デプロイ
 ├── docs/                     # セットアップドキュメント
-├── sfdx-project.json         # Salesforce プロジェクト設定（API v62.0）
+├── sfdx-project.json         # Salesforce プロジェクト設定（API v67.0）
 ├── .mise.toml                # sf CLI + Node.js バージョン管理
 └── package.json              # CI ツール（oxlint, oxfmt）
 ```

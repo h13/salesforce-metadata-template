@@ -11,7 +11,7 @@ set -euo pipefail
 ORG="${1:-sandbox}"
 
 echo "Retrieving metadata from org: $ORG"
-sf project retrieve start --target-org "$ORG" --wait 30
+sf project retrieve start --target-org "$ORG" --wait 60
 
 echo ""
 echo "Done. Review changes with: git diff"

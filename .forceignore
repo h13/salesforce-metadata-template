@@ -15,19 +15,28 @@
 # Example: Salesforce DevOps Center
 # **/sf_devops__*
 
-# IMPORTANT: `**/<prefix>__*` only matches paths whose basename STARTS with the
-# prefix, so it misses object translations. Those are named
-# "<StandardObject>-<prefix>__<locale>" (e.g. Account-pi__en_US), which puts the
-# prefix in the middle. Without the pattern below, `sf project retrieve start`
-# writes them into a stray nested force-app/main/default/main/default/
-# directory — thousands of files that are not yours to version. Add one line per
-# managed package prefix you exclude above:
+# Example: Internal Salesforce integrations
+# **/sfdcInternalInt__*
+
+# Example: Data Cloud connectors
+# **/cdp_crm_dk*
+# **/cdpactvstrgptnr*
+# **/ssot__*
+
+# Object translations for managed-package objects. These are named
+# "<StandardObject>-<prefix>__<locale>", so the prefix is not at the start of
+# the basename and the patterns above do not match them. Add one line per
+# prefix excluded above:
 # **/objectTranslations/*-pi__*
 # **/objectTranslations/*-sf_devops__*
+# **/objectTranslations/*-ssot__*
 
 # =============================================================================
-# Org-specific noise (uncomment or add as needed)
+# Org-specific noise (add as needed)
 # =============================================================================
 
 # Installed package definitions (managed externally, not deployable)
-# **/installedPackages
+**/installedPackages
+
+# Example: DevOps Center Named Credentials (auto-generated per sandbox)
+# **/namedCredentials/a0Y*

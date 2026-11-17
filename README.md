@@ -101,7 +101,8 @@ salesforce-metadata-template/
 │   └── retrieve.sh           # GUI change retrieval helper
 ├── .github/workflows/
 │   ├── ci.yml                # PR validation (dry-run deploy)
-│   └── deploy.yml            # Auto-deploy on push
+│   ├── deploy.yml            # Auto-deploy on push
+│   └── sync-template.yml     # Weekly template sync
 ├── docs/                     # Setup documentation
 ├── sfdx-project.json         # Salesforce project config (API v62.0)
 ├── .mise.toml                # sf CLI + Node.js version management
@@ -118,6 +119,14 @@ Required GitHub Secrets per environment (`sandbox` / `production`):
 - `SF_JWT_KEY` — Private key (PEM format)
 - `SF_USERNAME` — Admin username
 - `SF_INSTANCE_URL` — Instance URL
+
+## Template Sync
+
+Repositories created from this template receive upstream updates weekly via the `sync-template.yml` workflow. When updates are found, a PR with the `template-sync` label is created automatically.
+
+`.templatesyncignore` uses a whitelist format — only listed files (tooling configs and meta files) are synced. Your metadata, scripts, docs, and README are never overwritten.
+
+CI/CD workflow files are not synced: GitHub rejects workflow pushes from the default Actions token. Version bumps inside them (action SHAs) arrive via Renovate; changes to the CI logic itself are adopted per repo deliberately. Dependencies (`package.json`, `.mise.toml`) are Renovate's responsibility too.
 
 ## Documentation
 

@@ -1,3 +1,6 @@
+# Supply-chain: require packages to be at least 7 days old before installing.
+minimumReleaseAge: 10080
+
 allowBuilds:
   '@salesforce/cli': true
   protobufjs: true

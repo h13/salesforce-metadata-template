@@ -52,6 +52,7 @@ jobs:
         run: exit 1
 
   validate:
+    if: github.event.repository.is_template != true
     runs-on: ubuntu-latest
     needs: [check, code-analysis]
     steps:

@@ -101,7 +101,8 @@ salesforce-metadata-template/
 │   └── retrieve.sh           # GUI 変更取得ヘルパー
 ├── .github/workflows/
 │   ├── ci.yml                # PR バリデーション（dry-run deploy）
-│   └── deploy.yml            # push 時の自動デプロイ
+│   ├── deploy.yml            # push 時の自動デプロイ
+│   └── sync-template.yml     # 週次テンプレート同期
 ├── docs/                     # セットアップドキュメント
 ├── sfdx-project.json         # Salesforce プロジェクト設定（API v62.0）
 ├── .mise.toml                # sf CLI + Node.js バージョン管理
@@ -118,6 +119,14 @@ GitHub Secrets（環境ごとに `sandbox` / `production` で設定）:
 - `SF_JWT_KEY` — 秘密鍵（PEM 形式）
 - `SF_USERNAME` — 管理者ユーザー名
 - `SF_INSTANCE_URL` — インスタンス URL
+
+## テンプレート同期
+
+このテンプレートから作成したリポジトリは、`sync-template.yml` ワークフローが週次で上流の更新を確認し、更新があれば `template-sync` ラベル付きの PR を自動作成する。
+
+`.templatesyncignore` はホワイトリスト形式で、列挙したファイル（ツール設定とメタファイル）だけを同期する。メタデータ・スクリプト・ドキュメント・README が上書きされることはない。
+
+CI/CD ワークフローは同期しない。GitHub は既定の Actions トークンからのワークフロー push を拒否するため。ワークフロー内のバージョン更新（action の SHA）は Renovate が行い、CI ロジック自体の変更はリポジトリごとに意図して取り込む。依存関係（`package.json`・`.mise.toml`）も Renovate の管轄。
 
 ## ドキュメント
 

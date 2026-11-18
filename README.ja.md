@@ -128,6 +128,10 @@ GitHub Secrets（環境ごとに `sandbox` / `production` で設定）:
 
 CI/CD ワークフローは同期しない。GitHub は既定の Actions トークンからのワークフロー push を拒否するため。ワークフロー内のバージョン更新（action の SHA）は Renovate が行い、CI ロジック自体の変更はリポジトリごとに意図して取り込む。依存関係（`package.json`・`.mise.toml`）も Renovate の管轄。
 
+## Renovate
+
+依存関係は [Renovate](https://docs.renovatebot.com/) が更新する（設定は [`h13/renovate-config`](https://github.com/h13/renovate-config)）。このテンプレートから作成したリポジトリでは [Renovate アプリ](https://github.com/apps/renovate) のインストールが必要（[導入手順](https://docs.renovatebot.com/getting-started/installing-onboarding/)）。
+
 ## ドキュメント
 
 - [Org とリポジトリの運用モデル](docs/org-model.ja.md) — 1リポ = 1本番 org、複数 Sandbox の扱い、衝突回避

@@ -128,6 +128,10 @@ Repositories created from this template receive upstream updates weekly via the 
 
 CI/CD workflow files are not synced: GitHub rejects workflow pushes from the default Actions token. Version bumps inside them (action SHAs) arrive via Renovate; changes to the CI logic itself are adopted per repo deliberately. Dependencies (`package.json`, `.mise.toml`) are Renovate's responsibility too.
 
+## Renovate
+
+Dependencies are updated by [Renovate](https://docs.renovatebot.com/), configured via [`h13/renovate-config`](https://github.com/h13/renovate-config). Repositories created from this template need the [Renovate app](https://github.com/apps/renovate) installed — see the [installation guide](https://docs.renovatebot.com/getting-started/installing-onboarding/).
+
 ## Documentation
 
 - [Org and Repository Model](docs/org-model.md) — One repo per Production org, multiple Sandboxes, conflict avoidance

@@ -12,8 +12,6 @@ permissions:
 jobs:
   check:
     uses: h13/.github/.github/workflows/ci-node.yml@7498aee6e25cd3f2eecebea71078a27f8e40b1ac # v1
-    with:
-      node-version: '24'
 
   code-analysis:
     runs-on: ubuntu-latest

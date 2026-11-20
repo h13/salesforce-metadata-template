@@ -13,7 +13,7 @@
     "validate": "sf project deploy start --dry-run --target-org sandbox"
   },
   "devDependencies": {
-    "@salesforce/cli": "2.158.7",
+    "@salesforce/cli": "2.159.7",
     "oxfmt": "0.78.0",
     "oxlint": "1.93.0"
   },

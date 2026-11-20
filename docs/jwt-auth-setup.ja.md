@@ -7,7 +7,7 @@ CI/CD から Salesforce org にデプロイするための JWT Bearer Flow の�
 ## 概要
 
 ```
-GitHub Actions → JWT で認証 → Salesforce org にデプロイ
+GitHub Actions → JWT で認証（CI 専用ユーザーとして） → Salesforce org にデプロイ
 ```
 
 必要なもの:
@@ -21,147 +21,178 @@ GitHub Actions → JWT で認証 → Salesforce org にデプロイ
 ローカルで実行:
 
 ```bash
+mkdir -p ~/.config/salesforce-ci && cd ~/.config/salesforce-ci
+
 # 秘密鍵を生成
-openssl genrsa -out server.key 2048
+openssl genrsa -out server.key 2048 && chmod 600 server.key
 
 # 証明書を生成（有効期限 365 日）
 openssl req -new -x509 -key server.key -out server.crt -days 365 \
   -subj "/CN=salesforce-ci/O=YourCompany"
 ```
 
-`server.key` が CI で使う秘密鍵、`server.crt` が Salesforce に登録する証明書。
+`server.key` が CI で使う秘密鍵、`server.crt` が Salesforce に登録する証明書。リポジトリ配下には置かないこと。
 
-## 2. Salesforce で Connected App を作成
+## 2. CI 専用ユーザーの作成
 
-> **Note**: Connected App のメタデータは Metadata API で取得できない（Salesforce の制約）。
-> そのため `CI_Deploy` はこのリポジトリに含まれず、org 上で手動管理する。
-> 変更したときはこのドキュメントを更新して Git に記録を残す。
+デプロイは個人アカウントではなく専用のインテグレーションユーザーで実行します（担当者の異動・退職やパスワードポリシーの影響を受けないため）。Salesforce には「ユーザーに紐づかないサービスプリンシパル」が存在しないため、これが Salesforce 流のサービスアカウントです。
+
+管理者で認証済みの sf CLI から作成できます:
+
+```bash
+# システム管理者プロファイルの ID を取得
+pnpm exec sf data query --target-org sandbox \
+  --query "SELECT Id FROM Profile WHERE Name = 'システム管理者'"
+
+# CI ユーザーを作成（ProfileId は上の結果に置き換える）
+pnpm exec sf data create record --target-org sandbox --sobject User --values \
+  "Username='github-ci@company.com.sandboxname' LastName='GitHub CI' Alias='ghci' Email='<管理者のメール>' TimeZoneSidKey='Asia/Tokyo' LocaleSidKey='ja_JP' EmailEncodingKey='UTF-8' LanguageLocaleKey='ja' ProfileId='<ProfileId>'"
+```
+
+パスワードは設定しません。パスワードログイン不可のまま、認証は JWT 証明書のみで行います。
+
+> **ライセンスの補足**: 無償の「Salesforce Integration」ライセンス（API 専用）は、メタデータデプロイに必要な権限の組み合わせが難しい（型ごとの個別権限に加え、一部の型は Modify All Data が必須）ため、フルライセンス + システム管理者プロファイルを推奨します。
+
+## 3. Salesforce で外部クライアントアプリケーションを作成
+
+> **注意**: 2025 年以降の org では、新規「接続アプリケーション」の作成がデフォルトで無効化されています
+> （Metadata API 経由でも「接続アプリケーションを作成できません」エラーになる）。
+> 後継の**外部クライアントアプリケーション (External Client App)** を使います。JWT Bearer Flow を公式サポートしており、`sf org login jwt` もそのまま使えます。
+> アプリケーションの設定はこのリポジトリに含まれず org 上で手動管理するため、変更時はこのドキュメントを更新して Git 上で履歴を残してください。
 
 ### Sandbox org で設定
 
-1. **設定** → クイック検索で「アプリケーションマネージャ」を検索
-2. **新規接続アプリケーション** をクリック
-3. 以下を入力:
-   - 接続アプリケーション名: `CI Deploy`
-   - API 参照名: `CI_Deploy`
-   - 取引先責任者メール: 管理者のメール
-4. **OAuth 設定の有効化** にチェック
-5. 設定:
-   - コールバック URL: `https://login.salesforce.com/services/oauth2/callback`
-   - **デジタル署名を使用** にチェック → `server.crt` をアップロード
-   - OAuth スコープ:
-     - `Manage user data via APIs (api)`
-     - `Manage user data via Web browsers (web)`
-     - `Perform requests at any time (refresh_token, offline_access)`
-6. **保存**
+1. **設定** → クイック検索で「アプリ」と入力 → **アプリケーションマネージャ**
+2. **新規アプリケーション ▼** → **新規外部クライアントアプリケーション**
+3. 基本情報:
+   - 外部クライアントアプリケーション名: `CI Deploy` / API 参照名: `CI_Deploy`
+   - 取引先責任者メール: 管理者のメール / 配布状態: **ローカル**
+4. **OAuth 設定の有効化** にチェック:
+   - コールバック URL: `https://login.salesforce.com/services/oauth2/callback`（JWT フローでは未使用だが入力必須）
+   - OAuth 範囲: `api` / `web` / `refresh_token, offline_access`
+   - **JWT ベアラーフローを有効化** にチェック → `server.crt` をアップロード
+     （macOS のファイルダイアログで `~/.config` が見えないときは Cmd+Shift+. で隠しファイルを表示）
+5. **保存**
 
 ### アクセスポリシーの設定
 
-1. 作成した Connected App を開く
-2. **ポリシーを管理** → **編集**
-3. 許可されているユーザー: **管理者が承認したユーザーは事前承認済み**
+1. 作成したアプリの **ポリシー** タブ → **編集**
+2. アプリケーションポリシーの **プロファイルを選択** で「システム管理者」を選択済みに移動
+3. OAuth ポリシーの **許可されているユーザー** を **管理者が承認したユーザーは事前承認済み** に変更
 4. **保存**
-5. **プロファイル** セクションで「システム管理者」を追加
 
 ### コンシューマーキーを取得
 
-1. Connected App の詳細画面で **コンシューマーの詳細を管理** をクリック
-2. **コンシューマーキー** をコピー（これが `SF_CLIENT_ID`）
+1. **設定** タブ → **OAuth 設定** → コンシューマーキーと秘密を表示（本人確認を求められる場合あり）
+2. **コンシューマーキー** をコピー（これが `SF_CLIENT_ID`。コンシューマーの秘密は JWT フローでは使いません）
 
-## 3. Production org でも同じ手順を実行
+## 4. Production org でも同じ手順を実行
 
-Production org にも同じ Connected App を作成する。同じ `server.crt` を使えば、同じ秘密鍵で両方の org に認証できる。
+Production org にも同じ CI ユーザー（`github-ci@company.com`）と外部クライアントアプリケーションを作成する。同じ `server.crt` を使えば、同じ秘密鍵で両方の org に認証できる。
 
-## 4. GitHub Secrets の設定
+## 5. GitHub Secrets の設定
 
-リポジトリの **Settings** → **Environments** で2つの環境を作成:
+リポジトリの **Settings** → **Environments** で環境を作成して登録する。gh CLI なら:
+
+```bash
+gh api -X PUT repos/OWNER/REPO/environments/sandbox > /dev/null
+gh secret set SF_CLIENT_ID --env sandbox --body '<コンシューマーキー>'
+gh secret set SF_JWT_KEY --env sandbox < ~/.config/salesforce-ci/server.key
+gh secret set SF_USERNAME --env sandbox --body 'github-ci@company.com.sandboxname'
+gh secret set SF_INSTANCE_URL --env sandbox --body 'https://mycompany--dev.sandbox.my.salesforce.com'
+```
 
 ### `sandbox` 環境
 
-| Secret 名         | 値                                                                       |
-| ----------------- | ------------------------------------------------------------------------ |
-| `SF_CLIENT_ID`    | Connected App のコンシューマーキー                                       |
-| `SF_JWT_KEY`      | `server.key` の中身（PEM テキスト全体）                                  |
-| `SF_USERNAME`     | Sandbox の管理者ユーザー名（例: `admin@company.com.sandbox1`）           |
-| `SF_INSTANCE_URL` | Sandbox の URL（例: `https://mycompany--dev.sandbox.my.salesforce.com`） |
+| Secret 名         | 値                                                 |
+| ----------------- | -------------------------------------------------- |
+| `SF_CLIENT_ID`    | 外部クライアントアプリのコンシューマーキー         |
+| `SF_JWT_KEY`      | `server.key` の中身（PEM テキスト全体）            |
+| `SF_USERNAME`     | `github-ci@company.com.sandboxname`                |
+| `SF_INSTANCE_URL` | `https://mycompany--dev.sandbox.my.salesforce.com` |
 
 ### `production` 環境
 
-| Secret 名         | 値                                                             |
-| ----------------- | -------------------------------------------------------------- |
-| `SF_CLIENT_ID`    | Production の Connected App のコンシューマーキー               |
-| `SF_JWT_KEY`      | 同じ `server.key` の中身                                       |
-| `SF_USERNAME`     | Production の管理者ユーザー名（例: `admin@company.com`）       |
-| `SF_INSTANCE_URL` | Production の URL（例: `https://mycompany.my.salesforce.com`） |
+| Secret 名         | 値                                      |
+| ----------------- | --------------------------------------- |
+| `SF_CLIENT_ID`    | Production 側アプリのコンシューマーキー |
+| `SF_JWT_KEY`      | 同じ `server.key` の中身                |
+| `SF_USERNAME`     | `github-ci@company.com`                 |
+| `SF_INSTANCE_URL` | `https://mycompany.my.salesforce.com`   |
 
 ### CI validate 用の追加 Secrets（リポジトリレベル）
 
 PR の validate ジョブは環境外で動くため、リポジトリレベルにも Sandbox 用の Secrets が必要:
 
-| Secret 名                 | 値                                            |
-| ------------------------- | --------------------------------------------- |
-| `SF_CLIENT_ID`            | Sandbox の Connected App のコンシューマーキー |
-| `SF_JWT_KEY`              | `server.key` の中身                           |
-| `SF_SANDBOX_USERNAME`     | Sandbox の管理者ユーザー名                    |
-| `SF_SANDBOX_INSTANCE_URL` | Sandbox の URL                                |
+| Secret 名                 | 値                                   |
+| ------------------------- | ------------------------------------ |
+| `SF_CLIENT_ID`            | Sandbox 側アプリのコンシューマーキー |
+| `SF_JWT_KEY`              | `server.key` の中身                  |
+| `SF_SANDBOX_USERNAME`     | CI ユーザー名（Sandbox）             |
+| `SF_SANDBOX_INSTANCE_URL` | Sandbox の URL                       |
 
-## 5. ローカルでの認証テスト
+## 6. ローカルでの認証テスト
 
 ```bash
 pnpm exec sf org login jwt \
-  --client-id YOUR_CLIENT_ID \
-  --jwt-key-file server.key \
-  --username admin@company.com.sandbox1 \
+  --client-id <コンシューマーキー> \
+  --jwt-key-file ~/.config/salesforce-ci/server.key \
+  --username github-ci@company.com.sandboxname \
   --instance-url https://mycompany--dev.sandbox.my.salesforce.com \
-  --alias sandbox
+  --alias ci-sandbox
 ```
 
 成功すると以下が表示される:
 
 ```
-Successfully authorized admin@company.com.sandbox1 with org ID 00D...
+Successfully authorized github-ci@company.com.sandboxname with org ID 00D...
 ```
 
-## 6. 動作確認
+## 7. 動作確認
 
 ```bash
-# Sandbox にデプロイテスト
-pnpm exec sf project deploy start --dry-run --target-org sandbox --wait 30
+# CI ユーザーで Sandbox にデプロイテスト
+pnpm exec sf project deploy start --dry-run --target-org ci-sandbox --wait 30
 ```
 
 ## トラブルシューティング
 
+### 「接続アプリケーションを作成できません。…カスタマーサポートにお問い合わせください」
+
+新しい org では接続アプリケーションの新規作成が無効化されている。本ドキュメントの手順どおり、外部クライアントアプリケーションで作成する。
+
 ### `INVALID_LOGIN: Invalid login credentials`
 
-- Connected App のアクセスポリシーでユーザーが承認されているか確認
+- アプリのアクセスポリシーでユーザーのプロファイルが事前承認されているか確認
 - コンシューマーキーが正しいか確認
 - ユーザー名が正しいか確認（Sandbox は `.sandboxname` サフィックスが必要）
 
 ### `JWT_INVALID_GRANT: user hasn't approved this consumer`
 
-- Connected App で「管理者が承認したユーザーは事前承認済み」に設定されているか確認
-- プロファイルが追加されているか確認
+- 「管理者が承認したユーザーは事前承認済み」に設定されているか確認
+- プロファイルが選択済みに追加されているか確認
 
 ### `INVALID_CLIENT_ID`
 
-- Connected App 作成後、反映まで最大10分かかる場合がある
+- アプリ作成後、反映まで最大10分かかる場合がある
 - コンシューマーキーをコピーし直す
 
 ### 証明書の有効期限切れ
 
 ```bash
-# 新しい証明書を生成
-openssl req -new -x509 -key server.key -out server.crt -days 365 \
+# 新しい証明書を生成（秘密鍵はそのまま）
+openssl req -new -x509 -key ~/.config/salesforce-ci/server.key \
+  -out ~/.config/salesforce-ci/server.crt -days 365 \
   -subj "/CN=salesforce-ci/O=YourCompany"
 
-# Salesforce の Connected App で証明書を差し替え
+# 外部クライアントアプリの JWT ベアラーフロー設定で証明書を差し替え
 ```
 
 秘密鍵（`server.key`）はそのまま使えるので、GitHub Secrets の更新は不要。
 
 ## セキュリティ注意事項
 
-- `server.key` はリポジトリにコミットしない（`.gitignore` に追加推奨）
-- GitHub Secrets に登録したらローカルの `server.key` は安全に削除する
+- `server.key` はリポジトリにコミットしない（リポジトリ外の `~/.config/salesforce-ci/` 等に置く）
+- GitHub Secrets に登録したらローカルの `server.key` は安全に削除してよい（証明書を再発行する予定があるなら保管場所に注意して保持）
 - 証明書の有効期限をカレンダーに登録しておく
-- Production 環境には **Required reviewers** を設定し、手動承認を挟むことを推奨
+- Production 環境には **Required reviewers** と **Deployment branch policy（main のみ）** を設定し、手動承認を挟むことを推奨

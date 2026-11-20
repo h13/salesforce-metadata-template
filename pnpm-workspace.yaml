@@ -5,3 +5,6 @@ allowBuilds:
   '@salesforce/cli': true
   protobufjs: true
   yarn: true
+minimumReleaseAgeExclude:
+  # Renovate security update: oxfmt@0.79.0
+  - oxfmt@0.79.0

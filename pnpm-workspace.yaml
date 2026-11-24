@@ -10,3 +10,5 @@ minimumReleaseAgeExclude:
   - '@salesforce/cli@2.159.7'
   # Renovate security update: pnpm@12.23.0
   - pnpm@12.23.0
+  # Renovate security update: oxlint@1.95.0
+  - oxlint@1.95.0

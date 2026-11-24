@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "baseline": "bash scripts/baseline.sh",
     "check": "pnpm run lint && pnpm run format:check",
     "deploy:sandbox": "sf project deploy start --target-org sandbox",
     "format": "oxfmt --write .",

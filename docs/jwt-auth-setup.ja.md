@@ -90,46 +90,38 @@ pnpm exec sf data create record --target-org sandbox --sobject User --values \
 
 Production org にも同じ CI ユーザー（`github-ci@company.com`）と外部クライアントアプリケーションを作成する。同じ `server.crt` を使えば、同じ秘密鍵で両方の org に認証できる。
 
-## 5. GitHub Secrets の設定
+## 5. GitHub Environment の設定
 
+秘密にすべきは秘密鍵だけで、残りは非秘密の設定値なので environment **variables** に置き、UI から見える状態を保つ。
 リポジトリの **Settings** → **Environments** で環境を作成して登録する。gh CLI なら:
 
 ```bash
 gh api -X PUT repos/OWNER/REPO/environments/sandbox > /dev/null
-gh secret set SF_CLIENT_ID --env sandbox --body '<コンシューマーキー>'
 gh secret set SF_JWT_KEY --env sandbox < ~/.config/salesforce-ci/server.key
-gh secret set SF_USERNAME --env sandbox --body 'github-ci@company.com.sandboxname'
-gh secret set SF_INSTANCE_URL --env sandbox --body 'https://mycompany--dev.sandbox.my.salesforce.com'
+gh variable set SF_CLIENT_ID --env sandbox --body '<コンシューマーキー>'
+gh variable set SF_USERNAME --env sandbox --body 'github-ci@company.com.sandboxname'
+gh variable set SF_INSTANCE_URL --env sandbox --body 'https://mycompany--dev.sandbox.my.salesforce.com'
 ```
 
 ### `sandbox` 環境
 
-| Secret 名         | 値                                                 |
-| ----------------- | -------------------------------------------------- |
-| `SF_CLIENT_ID`    | 外部クライアントアプリのコンシューマーキー         |
-| `SF_JWT_KEY`      | `server.key` の中身（PEM テキスト全体）            |
-| `SF_USERNAME`     | `github-ci@company.com.sandboxname`                |
-| `SF_INSTANCE_URL` | `https://mycompany--dev.sandbox.my.salesforce.com` |
+| 種別     | 名前              | 値                                                 |
+| -------- | ----------------- | -------------------------------------------------- |
+| Secret   | `SF_JWT_KEY`      | `server.key` の中身（PEM テキスト全体）            |
+| Variable | `SF_CLIENT_ID`    | 外部クライアントアプリのコンシューマーキー         |
+| Variable | `SF_USERNAME`     | `github-ci@company.com.sandboxname`                |
+| Variable | `SF_INSTANCE_URL` | `https://mycompany--dev.sandbox.my.salesforce.com` |
 
 ### `production` 環境
 
-| Secret 名         | 値                                      |
-| ----------------- | --------------------------------------- |
-| `SF_CLIENT_ID`    | Production 側アプリのコンシューマーキー |
-| `SF_JWT_KEY`      | 同じ `server.key` の中身                |
-| `SF_USERNAME`     | `github-ci@company.com`                 |
-| `SF_INSTANCE_URL` | `https://mycompany.my.salesforce.com`   |
+| 種別     | 名前              | 値                                      |
+| -------- | ----------------- | --------------------------------------- |
+| Secret   | `SF_JWT_KEY`      | 同じ `server.key` の中身                |
+| Variable | `SF_CLIENT_ID`    | Production 側アプリのコンシューマーキー |
+| Variable | `SF_USERNAME`     | `github-ci@company.com`                 |
+| Variable | `SF_INSTANCE_URL` | `https://mycompany.my.salesforce.com`   |
 
-### CI validate 用の追加 Secrets（リポジトリレベル）
-
-PR の validate ジョブは環境外で動くため、リポジトリレベルにも Sandbox 用の Secrets が必要:
-
-| Secret 名                 | 値                                   |
-| ------------------------- | ------------------------------------ |
-| `SF_CLIENT_ID`            | Sandbox 側アプリのコンシューマーキー |
-| `SF_JWT_KEY`              | `server.key` の中身                  |
-| `SF_SANDBOX_USERNAME`     | CI ユーザー名（Sandbox）             |
-| `SF_SANDBOX_INSTANCE_URL` | Sandbox の URL                       |
+PR の validate ジョブも `sandbox` environment を参照する（ci.yml の `environment: sandbox`）ため、リポジトリレベルへの複製は不要。
 
 ## 6. ローカルでの認証テスト
 

@@ -26,10 +26,10 @@ jobs:
 
       - name: Authenticate
         env:
-          SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
+          SF_CLIENT_ID: ${{ vars.SF_CLIENT_ID }}
           SF_JWT_KEY: ${{ secrets.SF_JWT_KEY }}
-          SF_USERNAME: ${{ secrets.SF_USERNAME }}
-          SF_INSTANCE_URL: ${{ secrets.SF_INSTANCE_URL }}
+          SF_USERNAME: ${{ vars.SF_USERNAME }}
+          SF_INSTANCE_URL: ${{ vars.SF_INSTANCE_URL }}
         run: |
           echo "$SF_JWT_KEY" > server.key
           pnpm exec sf org login jwt \

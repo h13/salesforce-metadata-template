@@ -90,46 +90,40 @@ Do not set a password. The user stays password-less and authenticates only via t
 
 Create the same CI user (`github-ci@company.com`) and External Client App in Production. Using the same `server.crt` allows the same private key to authenticate to both orgs.
 
-## 5. Configure GitHub Secrets
+## 5. Configure the GitHub Environment
 
+Only the private key is a secret; the rest is non-secret configuration and
+goes into environment **variables** so it stays visible in the UI.
 Create the environments under repository **Settings** → **Environments**. With the gh CLI:
 
 ```bash
 gh api -X PUT repos/OWNER/REPO/environments/sandbox > /dev/null
-gh secret set SF_CLIENT_ID --env sandbox --body '<consumer key>'
 gh secret set SF_JWT_KEY --env sandbox < ~/.config/salesforce-ci/server.key
-gh secret set SF_USERNAME --env sandbox --body 'github-ci@company.com.sandboxname'
-gh secret set SF_INSTANCE_URL --env sandbox --body 'https://mycompany--dev.sandbox.my.salesforce.com'
+gh variable set SF_CLIENT_ID --env sandbox --body '<consumer key>'
+gh variable set SF_USERNAME --env sandbox --body 'github-ci@company.com.sandboxname'
+gh variable set SF_INSTANCE_URL --env sandbox --body 'https://mycompany--dev.sandbox.my.salesforce.com'
 ```
 
 ### `sandbox` environment
 
-| Secret            | Value                                              |
-| ----------------- | -------------------------------------------------- |
-| `SF_CLIENT_ID`    | External Client App consumer key                   |
-| `SF_JWT_KEY`      | Contents of `server.key` (full PEM text)           |
-| `SF_USERNAME`     | `github-ci@company.com.sandboxname`                |
-| `SF_INSTANCE_URL` | `https://mycompany--dev.sandbox.my.salesforce.com` |
+| Kind     | Name              | Value                                              |
+| -------- | ----------------- | -------------------------------------------------- |
+| Secret   | `SF_JWT_KEY`      | Contents of `server.key` (full PEM text)           |
+| Variable | `SF_CLIENT_ID`    | External Client App consumer key                   |
+| Variable | `SF_USERNAME`     | `github-ci@company.com.sandboxname`                |
+| Variable | `SF_INSTANCE_URL` | `https://mycompany--dev.sandbox.my.salesforce.com` |
 
 ### `production` environment
 
-| Secret            | Value                                 |
-| ----------------- | ------------------------------------- |
-| `SF_CLIENT_ID`    | Production app consumer key           |
-| `SF_JWT_KEY`      | Same `server.key` contents            |
-| `SF_USERNAME`     | `github-ci@company.com`               |
-| `SF_INSTANCE_URL` | `https://mycompany.my.salesforce.com` |
+| Kind     | Name              | Value                                 |
+| -------- | ----------------- | ------------------------------------- |
+| Secret   | `SF_JWT_KEY`      | Same `server.key` contents            |
+| Variable | `SF_CLIENT_ID`    | Production app consumer key           |
+| Variable | `SF_USERNAME`     | `github-ci@company.com`               |
+| Variable | `SF_INSTANCE_URL` | `https://mycompany.my.salesforce.com` |
 
-### Repository-level Secrets (for CI validation)
-
-The PR validate job runs outside environments, so Sandbox secrets are also needed at the repository level:
-
-| Secret                    | Value                    |
-| ------------------------- | ------------------------ |
-| `SF_CLIENT_ID`            | Sandbox app consumer key |
-| `SF_JWT_KEY`              | Contents of `server.key` |
-| `SF_SANDBOX_USERNAME`     | CI username (Sandbox)    |
-| `SF_SANDBOX_INSTANCE_URL` | Sandbox URL              |
+The PR validate job also runs against the `sandbox` environment
+(`environment: sandbox` in ci.yml), so no repository-level copies are needed.
 
 ## 6. Test Authentication Locally
 

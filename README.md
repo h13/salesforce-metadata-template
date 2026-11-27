@@ -45,16 +45,18 @@ mise install
 pnpm install
 ```
 
-Authenticate to your Sandbox:
+Set your org values in `scripts/org.sh` (My Domain name and shared sandbox name), then authenticate:
 
 ```bash
-pnpm exec sf org login web --alias sandbox --instance-url https://your-sandbox.sandbox.my.salesforce.com
+pnpm run login <sandbox-name>
 ```
+
+The instance URL is derived from the sandbox naming convention, and the alias is the sandbox name itself. Authentication is needed only once per sandbox (and again after a refresh).
 
 ### Retrieve GUI changes
 
 ```bash
-pnpm run retrieve
+pnpm run retrieve [sandbox-name]  # defaults to the shared sandbox
 ```
 
 ### Customizing retrieval scope
@@ -67,7 +69,7 @@ By default, `retrieve.sh` pulls metadata based on `sfdx-project.json` package di
 ### Validate before pushing
 
 ```bash
-pnpm run validate
+pnpm run validate [sandbox-name]  # defaults to the shared sandbox
 ```
 
 ### Code analysis and baseline
@@ -83,11 +85,13 @@ CI fails on Sev1 (Critical) / Sev2 (High) violations. Existing violations are pi
 - When you fix an existing violation, run `pnpm run baseline` in the same PR to lower the caps (ratchet)
 - A regeneration that would raise any cap fails; pass `pnpm run baseline --allow-increase` only when that increase is intended
 
-### Deploy manually
+### Deploy to a personal sandbox
 
 ```bash
-pnpm run deploy:sandbox
+pnpm run deploy <sandbox-name>
 ```
+
+Logs in first when not yet authenticated. Uncommitted local changes are deployed as-is. Deploys to the shared sandbox go through pushes to the `sandbox` branch only (the script refuses them).
 
 Production deploys happen only through CI/CD when changes are merged to `main`.
 
@@ -111,7 +115,11 @@ salesforce-metadata-template/
 │   ├── layouts/              # Page layouts
 │   └── ...                   # Other metadata categories
 ├── scripts/
-│   └── retrieve.sh           # GUI change retrieval helper
+│   ├── org.sh                # Per-org values (My Domain, shared sandbox name)
+│   ├── retrieve.sh           # GUI change retrieval helper
+│   ├── login.sh              # Web login to a sandbox
+│   ├── deploy.sh             # Deploy to a personal sandbox
+│   └── validate.sh           # Dry-run validation
 ├── .github/workflows/
 │   ├── ci.yml                # PR validation (dry-run deploy)
 │   ├── deploy.yml            # Auto-deploy on push

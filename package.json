@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "baseline": "bash scripts/baseline.sh",
-    "check": "pnpm run lint && pnpm run format:check",
+    "check": "pnpm run lint && pnpm run format:check && pnpm run format:apex:check",
     "deploy": "bash scripts/deploy.sh",
     "format": "oxfmt --write .",
+    "format:apex": "prettier --write --no-error-on-unmatched-pattern \"force-app/**/*.{cls,trigger}\"",
+    "format:apex:check": "prettier --check --no-error-on-unmatched-pattern \"force-app/**/*.{cls,trigger}\"",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --no-error-on-unmatched-pattern scripts/",
     "login": "bash scripts/login.sh",
@@ -18,7 +20,9 @@
   "devDependencies": {
     "@salesforce/cli": "2.159.7",
     "oxfmt": "0.78.0",
-    "oxlint": "1.93.0"
+    "oxlint": "1.93.0",
+    "prettier": "3.10.1",
+    "prettier-plugin-apex": "2.4.0"
   },
   "packageManager": "pnpm@12.23.0+sha512.02da94ffaf133f46074322afe552f90d40b5f71ae259aefbccdacc5085b1d617e98d65e0131f5748b9b67445978ee5055d7d59a473f1eef0d504854fefcd5975"
 }

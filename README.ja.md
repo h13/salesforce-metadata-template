@@ -66,6 +66,14 @@ pnpm run retrieve [sandbox名]  # 省略時は共有 sandbox
 - **`.forceignore`** — 管理パッケージのメタデータ（例: `**/pi__*`）を retrieve/deploy 対象外にします。インストール済みパッケージに合わせてコメントを外すかパターンを追加してください。
 - **`package.xml`** — ワイルドカード取得用のマニフェストを作成する場合、漏れやすいタイプ（`ApexTrigger`、`LightningComponentBundle`、`AuraDefinitionBundle`）を含めてください。
 
+### Apex の整形
+
+```bash
+pnpm run format:apex
+```
+
+Apex クラス・トリガーは Prettier（`prettier-plugin-apex`）で整形します（それ以外は oxfmt が担当）。`pnpm run check` に対応する検査が含まれます。
+
 ### デプロイ前の検証
 
 ```bash

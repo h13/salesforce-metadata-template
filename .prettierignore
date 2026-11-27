@@ -1,5 +1,5 @@
-# oxfmt ignore patterns (oxfmt reads .prettierignore by default; prettier itself
-# is not used here).
+# oxfmt ignore patterns (oxfmt reads .prettierignore by default; prettier is
+# used only for Apex via the format:apex script, scoped by its own glob).
 #
 # Everything in this repository is formatted, including metadata retrieved from
 # the org. The repository is the source of truth for its org — we deploy from

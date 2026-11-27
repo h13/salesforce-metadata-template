@@ -66,6 +66,14 @@ By default, `retrieve.sh` pulls metadata based on `sfdx-project.json` package di
 - **`.forceignore`** — Excludes managed package metadata (e.g., `**/pi__*`) from retrieve/deploy. Uncomment or add patterns for your installed packages.
 - **`package.xml`** — If you create a manifest for wildcard retrieval, ensure commonly missed types are included: `ApexTrigger`, `LightningComponentBundle`, `AuraDefinitionBundle`.
 
+### Format Apex
+
+```bash
+pnpm run format:apex
+```
+
+Apex classes and triggers are formatted with Prettier (`prettier-plugin-apex`); oxfmt covers everything else. `pnpm run check` includes the matching format check.
+
 ### Validate before pushing
 
 ```bash

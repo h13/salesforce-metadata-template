@@ -142,12 +142,7 @@ salesforce-metadata-template/
 
 Uses JWT Bearer Flow. See [docs/jwt-auth-setup.md](docs/jwt-auth-setup.md) for step-by-step setup instructions.
 
-Required per environment (`sandbox` / `production`):
-
-- Secret `SF_JWT_KEY` — Private key (PEM format)
-- Variable `SF_CLIENT_ID` — External Client App consumer key
-- Variable `SF_USERNAME` — CI username
-- Variable `SF_INSTANCE_URL` — Instance URL
+Repository variables: `SF_MY_DOMAIN` / `SF_CI_USERNAME` / `SF_CLIENT_ID`. Per environment (`sandbox` / `production`): secret `SF_JWT_KEY` (a sandbox key and a production key — separate pairs) plus variable `SANDBOX_ID` on sandbox environments only — the username and instance URL are derived in the workflows.
 
 ## Template Sync
 

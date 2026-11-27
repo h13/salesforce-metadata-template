@@ -48,7 +48,8 @@ jobs:
     if: github.event.repository.is_template != true
     runs-on: ubuntu-latest
     needs: [check]
-    # sandbox environment の既存シークレット/変数を使う（repo レベルへの複製は不要）
+    # Uses the sandbox environment's SF_JWT_KEY / SANDBOX_ID; connection values
+    # are derived from production-origin repository variables (docs/jwt-auth-setup.md)
     environment: sandbox
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -66,9 +67,17 @@ jobs:
         env:
           SF_CLIENT_ID: ${{ vars.SF_CLIENT_ID }}
           SF_JWT_KEY: ${{ secrets.SF_JWT_KEY }}
-          SF_USERNAME: ${{ vars.SF_USERNAME }}
-          SF_INSTANCE_URL: ${{ vars.SF_INSTANCE_URL }}
+          SF_MY_DOMAIN: ${{ vars.SF_MY_DOMAIN }}
+          SF_CI_USERNAME: ${{ vars.SF_CI_USERNAME }}
+          SANDBOX_ID: ${{ vars.SANDBOX_ID }}
         run: |
+          # Without SANDBOX_ID the derivation would point at production, so stop
+          if [ -z "$SANDBOX_ID" ]; then
+            echo "::error::SANDBOX_ID is not set on the sandbox environment"
+            exit 1
+          fi
+          SF_USERNAME="${SF_CI_USERNAME}.${SANDBOX_ID}"
+          SF_INSTANCE_URL="https://${SF_MY_DOMAIN}--${SANDBOX_ID}.sandbox.my.salesforce.com"
           echo "$SF_JWT_KEY" > server.key
           pnpm exec sf org login jwt \
             --client-id "$SF_CLIENT_ID" \

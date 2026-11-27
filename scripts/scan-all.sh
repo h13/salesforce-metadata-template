@@ -15,6 +15,6 @@ trap 'rm -rf "$TMP"' EXIT
 
 printf 'suppressions:\n  disable_suppressions: true\n' >"$TMP/no-suppressions.yml"
 
-pnpm exec sf code-analyzer run --workspace . \
+pnpm exec sf code-analyzer run --workspace force-app \
   --config-file "$TMP/no-suppressions.yml" \
   --view detail "$@"

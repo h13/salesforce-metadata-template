@@ -18,20 +18,23 @@ GitHub Actions → JWT で認証（CI 専用ユーザーとして） → Salesfo
 
 ## 1. 秘密鍵と証明書の生成
 
-ローカルで実行:
+鍵ペアは信頼の階層ごとに1本ずつ作る — 本番用と、全 sandbox 共用の2本。sandbox 用の鍵では本番が受け入れるトークンに署名できないため、保護ルールのない sandbox environment が本番に効く鍵を持つことがなくなる。
 
 ```bash
 mkdir -p ~/.config/salesforce-ci && cd ~/.config/salesforce-ci
 
-# 秘密鍵を生成
-openssl genrsa -out server.key 2048 && chmod 600 server.key
-
-# 証明書を生成（有効期限 365 日）
-openssl req -new -x509 -key server.key -out server.crt -days 365 \
+# 本番用の鍵ペア
+openssl genrsa -out production.key 2048 && chmod 600 production.key
+openssl req -new -x509 -key production.key -out production.crt -days 365 \
   -subj "/CN=salesforce-ci/O=YourCompany"
+
+# sandbox 用の鍵ペア
+openssl genrsa -out sandbox.key 2048 && chmod 600 sandbox.key
+openssl req -new -x509 -key sandbox.key -out sandbox.crt -days 365 \
+  -subj "/CN=salesforce-ci-sandbox/O=YourCompany"
 ```
 
-`server.key` が CI で使う秘密鍵、`server.crt` が Salesforce に登録する証明書。リポジトリ配下には置かないこと。
+`.key` が CI で使う秘密鍵、`.crt` が Salesforce に登録する証明書。いずれもリポジトリ配下には置かないこと。
 
 ## 2. CI 専用ユーザーの作成
 
@@ -41,12 +44,12 @@ openssl req -new -x509 -key server.key -out server.crt -days 365 \
 
 ```bash
 # システム管理者プロファイルの ID を取得
-pnpm exec sf data query --target-org sandbox \
+pnpm exec sf data query --target-org production \
   --query "SELECT Id FROM Profile WHERE Name = 'システム管理者'"
 
 # CI ユーザーを作成（ProfileId は上の結果に置き換える）
-pnpm exec sf data create record --target-org sandbox --sobject User --values \
-  "Username='github-ci@company.com.sandboxname' LastName='GitHub CI' Alias='ghci' Email='<管理者のメール>' TimeZoneSidKey='Asia/Tokyo' LocaleSidKey='ja_JP' EmailEncodingKey='UTF-8' LanguageLocaleKey='ja' ProfileId='<ProfileId>'"
+pnpm exec sf data create record --target-org production --sobject User --values \
+  "Username='github-ci@company.com' LastName='GitHub CI' Alias='ghci' Email='<管理者のメール>' TimeZoneSidKey='Asia/Tokyo' LocaleSidKey='ja_JP' EmailEncodingKey='UTF-8' LanguageLocaleKey='ja' ProfileId='<ProfileId>'"
 ```
 
 パスワードは設定しません。パスワードログイン不可のまま、認証は JWT 証明書のみで行います。
@@ -60,7 +63,7 @@ pnpm exec sf data create record --target-org sandbox --sobject User --values \
 > 後継の**外部クライアントアプリケーション (External Client App)** を使います。JWT Bearer Flow を公式サポートしており、`sf org login jwt` もそのまま使えます。
 > アプリケーションの設定はこのリポジトリに含まれず org 上で手動管理するため、変更時はこのドキュメントを更新して Git 上で履歴を残してください。
 
-### Sandbox org で設定
+### Production org で設定
 
 1. **設定** → クイック検索で「アプリ」と入力 → **アプリケーションマネージャ**
 2. **新規アプリケーション ▼** → **新規外部クライアントアプリケーション**
@@ -70,7 +73,7 @@ pnpm exec sf data create record --target-org sandbox --sobject User --values \
 4. **OAuth 設定の有効化** にチェック:
    - コールバック URL: `https://login.salesforce.com/services/oauth2/callback`（JWT フローでは未使用だが入力必須）
    - OAuth 範囲: `api` / `web` / `refresh_token, offline_access`
-   - **JWT ベアラーフローを有効化** にチェック → `server.crt` をアップロード
+   - **JWT ベアラーフローを有効化** にチェック → `production.crt` をアップロード
      （macOS のファイルダイアログで `~/.config` が見えないときは Cmd+Shift+. で隠しファイルを表示）
 5. **保存**
 
@@ -86,49 +89,56 @@ pnpm exec sf data create record --target-org sandbox --sobject User --values \
 1. **設定** タブ → **OAuth 設定** → コンシューマーキーと秘密を表示（本人確認を求められる場合あり）
 2. **コンシューマーキー** をコピー（これが `SF_CLIENT_ID`。コンシューマーの秘密は JWT フローでは使いません）
 
-## 4. Production org でも同じ手順を実行
+## 4. Sandbox へはリフレッシュで複製される
 
-Production org にも同じ CI ユーザー（`github-ci@company.com`）と外部クライアントアプリケーションを作成する。同じ `server.crt` を使えば、同じ秘密鍵で両方の org に認証できる。
+作成は Production で一度だけ行い、各 sandbox へはリフレッシュで複製される。外部クライアントアプリケーションは**同じコンシューマーキー**のまま複製され、CI ユーザーは username に `.{sandbox名}` が付いて複製される。リフレッシュでメールアドレスに `.invalid` が付くが、メールを受信しない CI ユーザーには実害がない。
 
-## 5. GitHub Environment の設定
+複製されるのは**本番の証明書**なので、リフレッシュ後に sandbox 側アプリの証明書を `sandbox.crt` に差し替える。差し替えるまで、その sandbox への CI 認証は明示的なエラーで失敗する（別の org に向かうことはない）。リフレッシュを待てない sandbox には、同じアプリ（証明書は `sandbox.crt`）とユーザーを手動で作成する。
 
-秘密にすべきは秘密鍵だけで、残りは非秘密の設定値なので environment **variables** に置き、UI から見える状態を保つ。
-リポジトリの **Settings** → **Environments** で環境を作成して登録する。gh CLI なら:
+## 5. GitHub の設定
+
+秘密にすべきは秘密鍵だけ。全 org 共通の値は repository **variables** に置き、各 environment が持つのは自分の階層の鍵と（sandbox なら）`SANDBOX_ID` だけ。username（`SF_CI_USERNAME` + `.SANDBOX_ID`）と instance URL（`SF_MY_DOMAIN` / `SANDBOX_ID` から）はワークフロー側で導出するため、環境追加時の登録はこの2つで済む。
 
 ```bash
+# Repository variables（全環境共通）
+gh variable set SF_MY_DOMAIN --body 'mycompany'
+gh variable set SF_CI_USERNAME --body 'github-ci@company.com'
+gh variable set SF_CLIENT_ID --body '<コンシューマーキー>'
+
+# 環境ごと
 gh api -X PUT repos/OWNER/REPO/environments/sandbox > /dev/null
-gh secret set SF_JWT_KEY --env sandbox < ~/.config/salesforce-ci/server.key
-gh variable set SF_CLIENT_ID --env sandbox --body '<コンシューマーキー>'
-gh variable set SF_USERNAME --env sandbox --body 'github-ci@company.com.sandboxname'
-gh variable set SF_INSTANCE_URL --env sandbox --body 'https://mycompany--dev.sandbox.my.salesforce.com'
+gh secret set SF_JWT_KEY --env sandbox < ~/.config/salesforce-ci/sandbox.key
+gh variable set SANDBOX_ID --env sandbox --body '<sandbox名>'
+
+gh api -X PUT repos/OWNER/REPO/environments/production > /dev/null
+gh secret set SF_JWT_KEY --env production < ~/.config/salesforce-ci/production.key
 ```
 
-### `sandbox` 環境
+### Repository variables
 
-| 種別     | 名前              | 値                                                 |
-| -------- | ----------------- | -------------------------------------------------- |
-| Secret   | `SF_JWT_KEY`      | `server.key` の中身（PEM テキスト全体）            |
-| Variable | `SF_CLIENT_ID`    | 外部クライアントアプリのコンシューマーキー         |
-| Variable | `SF_USERNAME`     | `github-ci@company.com.sandboxname`                |
-| Variable | `SF_INSTANCE_URL` | `https://mycompany--dev.sandbox.my.salesforce.com` |
+| 名前             | 値                                                         |
+| ---------------- | ---------------------------------------------------------- |
+| `SF_MY_DOMAIN`   | My Domain 名（`https://<SF_MY_DOMAIN>.my.salesforce.com`） |
+| `SF_CI_USERNAME` | `github-ci@company.com`                                    |
+| `SF_CLIENT_ID`   | 外部クライアントアプリのコンシューマーキー                 |
 
-### `production` 環境
+### 各 environment
 
-| 種別     | 名前              | 値                                      |
-| -------- | ----------------- | --------------------------------------- |
-| Secret   | `SF_JWT_KEY`      | 同じ `server.key` の中身                |
-| Variable | `SF_CLIENT_ID`    | Production 側アプリのコンシューマーキー |
-| Variable | `SF_USERNAME`     | `github-ci@company.com`                 |
-| Variable | `SF_INSTANCE_URL` | `https://mycompany.my.salesforce.com`   |
+| 種別     | 名前         | 値                                                                           |
+| -------- | ------------ | ---------------------------------------------------------------------------- |
+| Secret   | `SF_JWT_KEY` | 階層ごとの鍵: sandbox 環境は `sandbox.key`、`production` は `production.key` |
+| Variable | `SANDBOX_ID` | sandbox 名（`production` には**登録しない**）                                |
 
-PR の validate ジョブも `sandbox` environment を参照する（ci.yml の `environment: sandbox`）ため、リポジトリレベルへの複製は不要。
+各 environment は**自分の階層の鍵だけ**を持つ。sandbox 鍵では本番が受け入れるトークンに署名できない（本番が信頼するのは `production.crt` だけ）ため、保護ルールのない sandbox environment の中身では `production` environment の required reviewers を素通りできない。鍵は repository secret にせず environment secret に置くこと — repository secret はどのブランチのワークフローからも読めてしまう。
+
+PR の validate ジョブも `sandbox` environment を参照する（ci.yml の `environment: sandbox`）ため、鍵のリポジトリレベルへの複製は不要。
 
 ## 6. ローカルでの認証テスト
 
 ```bash
 pnpm exec sf org login jwt \
   --client-id <コンシューマーキー> \
-  --jwt-key-file ~/.config/salesforce-ci/server.key \
+  --jwt-key-file ~/.config/salesforce-ci/sandbox.key \
   --username github-ci@company.com.sandboxname \
   --instance-url https://mycompany--dev.sandbox.my.salesforce.com \
   --alias ci-sandbox
@@ -173,18 +183,18 @@ pnpm exec sf project deploy start --dry-run --target-org ci-sandbox --wait 30
 
 ```bash
 # 新しい証明書を生成（秘密鍵はそのまま）
-openssl req -new -x509 -key ~/.config/salesforce-ci/server.key \
-  -out ~/.config/salesforce-ci/server.crt -days 365 \
+openssl req -new -x509 -key ~/.config/salesforce-ci/production.key \
+  -out ~/.config/salesforce-ci/production.crt -days 365 \
   -subj "/CN=salesforce-ci/O=YourCompany"
 
 # 外部クライアントアプリの JWT ベアラーフロー設定で証明書を差し替え
 ```
 
-秘密鍵（`server.key`）はそのまま使えるので、GitHub Secrets の更新は不要。
+秘密鍵はそのまま使えるので、GitHub Secrets の更新は不要（証明書の再発行は鍵ペアごとに行う）。
 
 ## セキュリティ注意事項
 
-- `server.key` はリポジトリにコミットしない（リポジトリ外の `~/.config/salesforce-ci/` 等に置く）
-- GitHub Secrets に登録したらローカルの `server.key` は安全に削除してよい（証明書を再発行する予定があるなら保管場所に注意して保持）
+- 秘密鍵はリポジトリにコミットしない（リポジトリ外の `~/.config/salesforce-ci/` 等に置く）
+- GitHub Secrets に登録したらローカルの秘密鍵は安全に削除してよい（証明書を再発行する予定があるなら保管場所に注意して保持）
 - 証明書の有効期限をカレンダーに登録しておく
 - Production 環境には **Required reviewers** と **Deployment branch policy（main のみ）** を設定し、手動承認を挟むことを推奨

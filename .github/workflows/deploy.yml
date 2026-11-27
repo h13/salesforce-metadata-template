@@ -28,9 +28,25 @@ jobs:
         env:
           SF_CLIENT_ID: ${{ vars.SF_CLIENT_ID }}
           SF_JWT_KEY: ${{ secrets.SF_JWT_KEY }}
-          SF_USERNAME: ${{ vars.SF_USERNAME }}
-          SF_INSTANCE_URL: ${{ vars.SF_INSTANCE_URL }}
+          SF_MY_DOMAIN: ${{ vars.SF_MY_DOMAIN }}
+          SF_CI_USERNAME: ${{ vars.SF_CI_USERNAME }}
+          SANDBOX_ID: ${{ vars.SANDBOX_ID }}
         run: |
+          # A SANDBOX_ID / environment mismatch would derive an unintended org, so stop
+          if [ "$GITHUB_REF_NAME" != "main" ] && [ -z "$SANDBOX_ID" ]; then
+            echo "::error::SANDBOX_ID is not set on the sandbox environment"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" = "main" ] && [ -n "$SANDBOX_ID" ]; then
+            echo "::error::production environment must not define SANDBOX_ID"
+            exit 1
+          fi
+          SF_USERNAME="${SF_CI_USERNAME}${SANDBOX_ID:+.$SANDBOX_ID}"
+          if [ -n "$SANDBOX_ID" ]; then
+            SF_INSTANCE_URL="https://${SF_MY_DOMAIN}--${SANDBOX_ID}.sandbox.my.salesforce.com"
+          else
+            SF_INSTANCE_URL="https://${SF_MY_DOMAIN}.my.salesforce.com"
+          fi
           echo "$SF_JWT_KEY" > server.key
           pnpm exec sf org login jwt \
             --client-id "$SF_CLIENT_ID" \

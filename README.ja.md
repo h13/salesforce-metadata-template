@@ -142,12 +142,7 @@ salesforce-metadata-template/
 
 JWT Bearer Flow を使用。セットアップ手順は [docs/jwt-auth-setup.ja.md](docs/jwt-auth-setup.ja.md) を参照。
 
-環境ごと（`sandbox` / `production`）に設定:
-
-- Secret `SF_JWT_KEY` — 秘密鍵（PEM 形式）
-- Variable `SF_CLIENT_ID` — 外部クライアントアプリのコンシューマーキー
-- Variable `SF_USERNAME` — CI ユーザー名
-- Variable `SF_INSTANCE_URL` — インスタンス URL
+Repository variables: `SF_MY_DOMAIN` / `SF_CI_USERNAME` / `SF_CLIENT_ID`。環境ごと（`sandbox` / `production`）には secret `SF_JWT_KEY`（sandbox 用と本番用で別の鍵ペア）と、sandbox 環境のみ variable `SANDBOX_ID` を登録する。username と instance URL はワークフロー側で導出される。
 
 ## テンプレート同期
 

@@ -16,22 +16,25 @@ Requirements:
 - OpenSSL (for key generation)
 - Access to GitHub repository Settings
 
-## 1. Generate Private Key and Certificate
+## 1. Generate Private Keys and Certificates
 
-Run locally:
+Generate one key pair per trust tier — one for production, one shared by all sandboxes. A sandbox-only key cannot sign tokens that production accepts, so the unprotected sandbox environments never hold a key that works against production.
 
 ```bash
 mkdir -p ~/.config/salesforce-ci && cd ~/.config/salesforce-ci
 
-# Generate private key
-openssl genrsa -out server.key 2048 && chmod 600 server.key
-
-# Generate certificate (valid for 365 days)
-openssl req -new -x509 -key server.key -out server.crt -days 365 \
+# Production key pair
+openssl genrsa -out production.key 2048 && chmod 600 production.key
+openssl req -new -x509 -key production.key -out production.crt -days 365 \
   -subj "/CN=salesforce-ci/O=YourCompany"
+
+# Sandbox key pair
+openssl genrsa -out sandbox.key 2048 && chmod 600 sandbox.key
+openssl req -new -x509 -key sandbox.key -out sandbox.crt -days 365 \
+  -subj "/CN=salesforce-ci-sandbox/O=YourCompany"
 ```
 
-`server.key` is used in CI. `server.crt` is uploaded to Salesforce. Keep both outside the repository.
+The `.key` files are used in CI. The `.crt` files are uploaded to Salesforce. Keep all of them outside the repository.
 
 ## 2. Create a Dedicated CI User
 
@@ -41,12 +44,12 @@ You can create it from an admin-authenticated sf CLI:
 
 ```bash
 # Get the System Administrator profile ID
-pnpm exec sf data query --target-org sandbox \
+pnpm exec sf data query --target-org production \
   --query "SELECT Id FROM Profile WHERE Name = 'System Administrator'"
 
 # Create the CI user (replace ProfileId with the result above)
-pnpm exec sf data create record --target-org sandbox --sobject User --values \
-  "Username='github-ci@company.com.sandboxname' LastName='GitHub CI' Alias='ghci' Email='<admin email>' TimeZoneSidKey='Asia/Tokyo' LocaleSidKey='ja_JP' EmailEncodingKey='UTF-8' LanguageLocaleKey='ja' ProfileId='<ProfileId>'"
+pnpm exec sf data create record --target-org production --sobject User --values \
+  "Username='github-ci@company.com' LastName='GitHub CI' Alias='ghci' Email='<admin email>' TimeZoneSidKey='Asia/Tokyo' LocaleSidKey='ja_JP' EmailEncodingKey='UTF-8' LanguageLocaleKey='ja' ProfileId='<ProfileId>'"
 ```
 
 Do not set a password. The user stays password-less and authenticates only via the JWT certificate.
@@ -60,7 +63,7 @@ Do not set a password. The user stays password-less and authenticates only via t
 > Use the successor, an **External Client App**: it officially supports the JWT Bearer Flow and works with `sf org login jwt` as-is.
 > The app configuration is not included in this repository and is managed manually in the org — when you change it, update this document to keep a record in Git.
 
-### Configure in the Sandbox org
+### Configure in the Production org
 
 1. **Setup** → Quick Find: type "App" → **App Manager**
 2. **New App ▼** → **New External Client App**
@@ -70,7 +73,7 @@ Do not set a password. The user stays password-less and authenticates only via t
 4. Check **Enable OAuth Settings**:
    - Callback URL: `https://login.salesforce.com/services/oauth2/callback` (unused by this flow but required)
    - OAuth Scopes: `api` / `web` / `refresh_token, offline_access`
-   - Check **Enable JWT Bearer Flow** → upload `server.crt`
+   - Check **Enable JWT Bearer Flow** → upload `production.crt`
      (if the macOS file dialog hides `~/.config`, press Cmd+Shift+. to show hidden files)
 5. **Save**
 
@@ -86,51 +89,57 @@ Do not set a password. The user stays password-less and authenticates only via t
 1. **Settings** tab → **OAuth Settings** → reveal consumer key and secret (identity verification may be required)
 2. Copy the **Consumer Key** (this is `SF_CLIENT_ID`; the consumer secret is not used by the JWT flow)
 
-## 4. Repeat for the Production Org
+## 4. Sandboxes Receive Copies on Refresh
 
-Create the same CI user (`github-ci@company.com`) and External Client App in Production. Using the same `server.crt` allows the same private key to authenticate to both orgs.
+Everything is created once, in Production; each sandbox receives a copy on refresh. The External Client App is cloned with the **same consumer key**, and the CI user is cloned with a `.{sandboxname}` username suffix. The refresh also appends `.invalid` to user emails, which is harmless for a CI user that receives no mail.
 
-## 5. Configure the GitHub Environment
+The clone carries the **production certificate**, so after each refresh, replace the certificate in the sandbox copy of the app with `sandbox.crt`. Until it is replaced, CI authentication against that sandbox fails with an explicit error — it never falls through to another org. For a sandbox you cannot refresh yet, create the same app (with `sandbox.crt`) and user there manually.
 
-Only the private key is a secret; the rest is non-secret configuration and
-goes into environment **variables** so it stays visible in the UI.
-Create the environments under repository **Settings** → **Environments**. With the gh CLI:
+## 5. Configure GitHub
+
+Only the private keys are secrets. Values shared by every org are repository **variables**; each environment holds only its tier's key and, for sandboxes, `SANDBOX_ID`. The workflows derive the username (`SF_CI_USERNAME` + `.SANDBOX_ID` suffix) and the instance URL (from `SF_MY_DOMAIN` / `SANDBOX_ID`), so adding an environment means registering just those two values.
 
 ```bash
+# Repository variables (shared by all environments)
+gh variable set SF_MY_DOMAIN --body 'mycompany'
+gh variable set SF_CI_USERNAME --body 'github-ci@company.com'
+gh variable set SF_CLIENT_ID --body '<consumer key>'
+
+# Per environment
 gh api -X PUT repos/OWNER/REPO/environments/sandbox > /dev/null
-gh secret set SF_JWT_KEY --env sandbox < ~/.config/salesforce-ci/server.key
-gh variable set SF_CLIENT_ID --env sandbox --body '<consumer key>'
-gh variable set SF_USERNAME --env sandbox --body 'github-ci@company.com.sandboxname'
-gh variable set SF_INSTANCE_URL --env sandbox --body 'https://mycompany--dev.sandbox.my.salesforce.com'
+gh secret set SF_JWT_KEY --env sandbox < ~/.config/salesforce-ci/sandbox.key
+gh variable set SANDBOX_ID --env sandbox --body '<sandbox name>'
+
+gh api -X PUT repos/OWNER/REPO/environments/production > /dev/null
+gh secret set SF_JWT_KEY --env production < ~/.config/salesforce-ci/production.key
 ```
 
-### `sandbox` environment
+### Repository variables
 
-| Kind     | Name              | Value                                              |
-| -------- | ----------------- | -------------------------------------------------- |
-| Secret   | `SF_JWT_KEY`      | Contents of `server.key` (full PEM text)           |
-| Variable | `SF_CLIENT_ID`    | External Client App consumer key                   |
-| Variable | `SF_USERNAME`     | `github-ci@company.com.sandboxname`                |
-| Variable | `SF_INSTANCE_URL` | `https://mycompany--dev.sandbox.my.salesforce.com` |
+| Name             | Value                                                       |
+| ---------------- | ----------------------------------------------------------- |
+| `SF_MY_DOMAIN`   | My Domain name (`https://<SF_MY_DOMAIN>.my.salesforce.com`) |
+| `SF_CI_USERNAME` | `github-ci@company.com`                                     |
+| `SF_CLIENT_ID`   | External Client App consumer key                            |
 
-### `production` environment
+### Each environment
 
-| Kind     | Name              | Value                                 |
-| -------- | ----------------- | ------------------------------------- |
-| Secret   | `SF_JWT_KEY`      | Same `server.key` contents            |
-| Variable | `SF_CLIENT_ID`    | Production app consumer key           |
-| Variable | `SF_USERNAME`     | `github-ci@company.com`               |
-| Variable | `SF_INSTANCE_URL` | `https://mycompany.my.salesforce.com` |
+| Kind     | Name         | Value                                                                                   |
+| -------- | ------------ | --------------------------------------------------------------------------------------- |
+| Secret   | `SF_JWT_KEY` | The tier's key: `sandbox.key` on sandbox environments, `production.key` on `production` |
+| Variable | `SANDBOX_ID` | Sandbox name (**do not set** on `production`)                                           |
+
+Each environment holds **its own tier's key**. The sandbox key cannot sign tokens production accepts (production only trusts `production.crt`), so even though sandbox environments have no protection rules, nothing they hold can bypass the `production` environment's required reviewers. Keep the keys as environment secrets, not repository secrets — a repository secret can be read by a workflow on any branch.
 
 The PR validate job also runs against the `sandbox` environment
-(`environment: sandbox` in ci.yml), so no repository-level copies are needed.
+(`environment: sandbox` in ci.yml), so no repository-level copies of the key are needed.
 
 ## 6. Test Authentication Locally
 
 ```bash
 pnpm exec sf org login jwt \
   --client-id <consumer key> \
-  --jwt-key-file ~/.config/salesforce-ci/server.key \
+  --jwt-key-file ~/.config/salesforce-ci/sandbox.key \
   --username github-ci@company.com.sandboxname \
   --instance-url https://mycompany--dev.sandbox.my.salesforce.com \
   --alias ci-sandbox
@@ -174,19 +183,19 @@ Newer orgs disable creation of new Connected Apps. Create an External Client App
 ### Certificate expiration
 
 ```bash
-# Generate a new certificate (the private key stays the same)
-openssl req -new -x509 -key ~/.config/salesforce-ci/server.key \
-  -out ~/.config/salesforce-ci/server.crt -days 365 \
+# Generate a new certificate (the private key stays the same); repeat per key pair
+openssl req -new -x509 -key ~/.config/salesforce-ci/production.key \
+  -out ~/.config/salesforce-ci/production.crt -days 365 \
   -subj "/CN=salesforce-ci/O=YourCompany"
 
 # Replace the certificate in the External Client App's JWT Bearer Flow settings
 ```
 
-The private key (`server.key`) remains unchanged, so no GitHub Secrets update is needed.
+The private keys remain unchanged, so no GitHub Secrets update is needed.
 
 ## Security Notes
 
-- Never commit `server.key` to the repository (keep it outside the repo, e.g. `~/.config/salesforce-ci/`)
-- After registering it in GitHub Secrets, you may delete the local `server.key` (keep it in a safe place if you plan to reissue certificates)
+- Never commit the private keys to the repository (keep them outside the repo, e.g. `~/.config/salesforce-ci/`)
+- After registering them in GitHub Secrets, you may delete the local keys (keep them in a safe place if you plan to reissue certificates)
 - Set a calendar reminder for certificate expiration
 - Add **Required reviewers** and a **deployment branch policy (main only)** to the `production` environment

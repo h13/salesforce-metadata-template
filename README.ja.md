@@ -45,16 +45,18 @@ mise install
 pnpm install
 ```
 
-Sandbox への認証:
+`scripts/org.sh` に組織の値（My Domain 名・共有 sandbox 名）を設定してから認証します:
 
 ```bash
-pnpm exec sf org login web --alias sandbox --instance-url https://your-sandbox.sandbox.my.salesforce.com
+pnpm run login <sandbox名>
 ```
+
+instance URL は sandbox の命名規則から導出され、エイリアス = sandbox名 で登録されます。認証は sandbox ごとに初回とリフレッシュ後だけで済みます。
 
 ### GUI 変更の取り込み
 
 ```bash
-pnpm run retrieve
+pnpm run retrieve [sandbox名]  # 省略時は共有 sandbox
 ```
 
 ### retrieve 範囲のカスタマイズ
@@ -67,7 +69,7 @@ pnpm run retrieve
 ### デプロイ前の検証
 
 ```bash
-pnpm run validate
+pnpm run validate [sandbox名]  # 省略時は共有 sandbox
 ```
 
 ### コード解析とベースライン
@@ -83,11 +85,13 @@ CI は Sev1 (Critical) / Sev2 (High) の違反で fail します。既存違反�
 - 既存違反を修正したら、同じ PR で `pnpm run baseline` を実行して上限を下げます（ラチェット）
 - 件数が増える再生成はエラーで止まります。承知の上で取り込むときだけ `pnpm run baseline --allow-increase` を付けてください
 
-### 手動デプロイ
+### 個人 sandbox へのデプロイ
 
 ```bash
-pnpm run deploy:sandbox
+pnpm run deploy <sandbox名>
 ```
+
+未認証なら先に web ログインを挟んでからデプロイします。手元の未コミット変更もそのまま反映されます。共有 sandbox へのデプロイは `sandbox` ブランチへの push 経由のみです（script 側でも拒否します）。
 
 本番へのデプロイは `main` ブランチへのマージで CI/CD が自動実行します（ローカルからの手動デプロイは不可）。
 
@@ -111,7 +115,11 @@ salesforce-metadata-template/
 │   ├── layouts/              # ページレイアウト
 │   └── ...                   # その他のメタデータカテゴリ
 ├── scripts/
-│   └── retrieve.sh           # GUI 変更取得ヘルパー
+│   ├── org.sh                # 組織ごとの値（My Domain・共有 sandbox 名）
+│   ├── retrieve.sh           # GUI 変更取得ヘルパー
+│   ├── login.sh              # sandbox への web ログイン
+│   ├── deploy.sh             # 個人 sandbox へのデプロイ
+│   └── validate.sh           # dry-run 検証
 ├── .github/workflows/
 │   ├── ci.yml                # PR バリデーション（dry-run deploy）
 │   ├── deploy.yml            # push 時の自動デプロイ

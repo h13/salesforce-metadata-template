@@ -5,14 +5,15 @@
   "scripts": {
     "baseline": "bash scripts/baseline.sh",
     "check": "pnpm run lint && pnpm run format:check",
-    "deploy:sandbox": "sf project deploy start --target-org sandbox",
+    "deploy": "bash scripts/deploy.sh",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --no-error-on-unmatched-pattern scripts/",
+    "login": "bash scripts/login.sh",
     "retrieve": "bash scripts/retrieve.sh",
     "scan": "sf code-analyzer run --workspace . --view detail",
     "scan:all": "bash scripts/scan-all.sh",
-    "validate": "sf project deploy start --dry-run --target-org sandbox"
+    "validate": "bash scripts/validate.sh"
   },
   "devDependencies": {
     "@salesforce/cli": "2.159.7",

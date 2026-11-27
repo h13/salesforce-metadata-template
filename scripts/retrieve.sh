@@ -4,11 +4,16 @@ set -euo pipefail
 # retrieve.sh — Pull metadata changes made via GUI from the target org.
 #
 # Usage:
-#   ./scripts/retrieve.sh [org-alias]
+#   ./scripts/retrieve.sh [sandbox-name]
 #
-# Defaults to "sandbox" if no alias is provided.
+# Defaults to the shared sandbox configured in scripts/org.sh.
 
-ORG="${1:-sandbox}"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/org.sh"
+
+ORG="${1:-$SHARED_SANDBOX}"
+
+bash "$(dirname "$0")/login.sh" "$ORG"
 
 echo "Retrieving metadata from org: $ORG"
 sf project retrieve start --target-org "$ORG" --wait 60

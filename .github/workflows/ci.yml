@@ -36,14 +36,12 @@ jobs:
         id: run-code-analyzer
         uses: forcedotcom/run-code-analyzer@318e7429b49b97904dc41f7acbd41003db403965 # v2.14.0
         with:
-          run-arguments: --workspace . --view detail --output-file sfca_results.html --output-file sfca_results.json
+          run-arguments: --workspace force-app --view detail --output-file sfca_results.html --output-file sfca_results.json
           results-artifact-name: salesforce-code-analyzer-results
           github-token: ${{ github.token }}
 
-      - name: Fail on Critical or High severity violations
-        if: |
-          steps.run-code-analyzer.outputs.num-sev1-violations > 0 ||
-          steps.run-code-analyzer.outputs.num-sev2-violations > 0
+      - name: Fail on any violations
+        if: steps.run-code-analyzer.outputs.num-violations > 0
         run: exit 1
 
   validate:

@@ -86,7 +86,7 @@ pnpm run validate [sandbox名]  # 省略時は共有 sandbox
 pnpm run scan
 ```
 
-CI は Sev1 (Critical) / Sev2 (High) の違反で fail します。既存違反は `code-analyzer.yml` にファイル×ルール単位の上限として固定し、上限を超えた分＝新規違反だけが fail します。
+CI は severity を問わずすべての違反で fail します。既存違反は `code-analyzer.yml` にファイル×ルール単位の上限として固定し、上限を超えた分＝新規違反だけが fail します。
 
 - 初回は `pnpm run baseline` を実行して、org の既存違反から `code-analyzer.yml` を生成してください
 - 既存違反の詳細（ファイル・行・メッセージ）は `pnpm run scan:all` で確認できます（抑止無効の詳細スキャン。`--target <file>` で絞り込み可）。件数だけなら `code-analyzer.yml` を直接見るのが速いです
@@ -153,7 +153,7 @@ JWT Bearer Flow を使用。セットアップ手順は [docs/jwt-auth-setup.ja.
 
 このテンプレートから作成したリポジトリは、`sync-template.yml` ワークフローが週次で上流の更新を確認し、更新があれば `template-sync` ラベル付きの PR を自動作成する。
 
-`.templatesyncignore` はホワイトリスト形式で、列挙したファイル（ツール設定とメタファイル）だけを同期する。メタデータ・スクリプト・ドキュメント・README が上書きされることはない。
+`.templatesyncignore` は許可リスト形式で、列挙したファイル（ツール設定とメタファイル）だけを同期する。メタデータ・スクリプト・ドキュメント・README が上書きされることはない。
 
 CI/CD ワークフローは同期しない。GitHub は既定の Actions トークンからのワークフロー push を拒否するため。ワークフロー内のバージョン更新（action の SHA）は Renovate が行い、CI ロジック自体の変更はリポジトリごとに意図して取り込む。依存関係（`package.json`・`.mise.toml`）も Renovate の管轄。
 

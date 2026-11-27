@@ -86,7 +86,7 @@ pnpm run validate [sandbox-name]  # defaults to the shared sandbox
 pnpm run scan
 ```
 
-CI fails on Sev1 (Critical) / Sev2 (High) violations. Existing violations are pinned in `code-analyzer.yml` as per-file, per-rule caps, so only new violations beyond a cap fail.
+CI fails on violations of any severity. Existing violations are pinned in `code-analyzer.yml` as per-file, per-rule caps, so only new violations beyond a cap fail.
 
 - Run `pnpm run baseline` once to generate `code-analyzer.yml` from your org's existing violations
 - To see the details of existing violations (file / line / message), run `pnpm run scan:all` — a full scan with suppressions disabled; narrow it with `--target <file>`. For counts alone, read `code-analyzer.yml` directly
@@ -153,7 +153,7 @@ Required per environment (`sandbox` / `production`):
 
 Repositories created from this template receive upstream updates weekly via the `sync-template.yml` workflow. When updates are found, a PR with the `template-sync` label is created automatically.
 
-`.templatesyncignore` uses a whitelist format — only listed files (tooling configs and meta files) are synced. Your metadata, scripts, docs, and README are never overwritten.
+`.templatesyncignore` uses an allowlist format — only listed files (tooling configs and meta files) are synced. Your metadata, scripts, docs, and README are never overwritten.
 
 CI/CD workflow files are not synced: GitHub rejects workflow pushes from the default Actions token. Version bumps inside them (action SHAs) arrive via Renovate; changes to the CI logic itself are adopted per repo deliberately. Dependencies (`package.json`, `.mise.toml`) are Renovate's responsibility too.
 

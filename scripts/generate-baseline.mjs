@@ -19,8 +19,8 @@ if (!jsonPath) {
 }
 
 const OUT = 'code-analyzer.yml';
-// CI は Sev1 (Critical) / Sev2 (High) で fail するので、その範囲だけを固定する
-const GATED_SEVERITY = 2;
+// CI は全 severity で fail するので、全件を固定する
+const GATED_SEVERITY = 5;
 
 const results = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 const counts = results.violations

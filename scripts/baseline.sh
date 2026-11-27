@@ -18,7 +18,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 printf 'suppressions:\n  disable_suppressions: true\n' >"$TMP/no-suppressions.yml"
 echo "抑止無効でスキャンします（数分かかります）" >&2
-pnpm exec sf code-analyzer run --workspace . \
+pnpm exec sf code-analyzer run --workspace force-app \
   --config-file "$TMP/no-suppressions.yml" \
   --output-file "$TMP/sfca_results.json"
 

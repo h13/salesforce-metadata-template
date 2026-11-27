@@ -70,6 +70,19 @@ By default, `retrieve.sh` pulls metadata based on `sfdx-project.json` package di
 pnpm run validate
 ```
 
+### Code analysis and baseline
+
+```bash
+pnpm run scan
+```
+
+CI fails on Sev1 (Critical) / Sev2 (High) violations. Existing violations are pinned in `code-analyzer.yml` as per-file, per-rule caps, so only new violations beyond a cap fail.
+
+- Run `pnpm run baseline` once to generate `code-analyzer.yml` from your org's existing violations
+- To see the details of existing violations (file / line / message), run `pnpm run scan:all` — a full scan with suppressions disabled; narrow it with `--target <file>`. For counts alone, read `code-analyzer.yml` directly
+- When you fix an existing violation, run `pnpm run baseline` in the same PR to lower the caps (ratchet)
+- A regeneration that would raise any cap fails; pass `pnpm run baseline --allow-increase` only when that increase is intended
+
 ### Deploy manually
 
 ```bash

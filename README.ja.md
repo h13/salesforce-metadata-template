@@ -70,6 +70,19 @@ pnpm run retrieve
 pnpm run validate
 ```
 
+### コード解析とベースライン
+
+```bash
+pnpm run scan
+```
+
+CI は Sev1 (Critical) / Sev2 (High) の違反で fail します。既存違反は `code-analyzer.yml` にファイル×ルール単位の上限として固定し、上限を超えた分＝新規違反だけが fail します。
+
+- 初回は `pnpm run baseline` を実行して、org の既存違反から `code-analyzer.yml` を生成してください
+- 既存違反の詳細（ファイル・行・メッセージ）は `pnpm run scan:all` で確認できます（抑止無効の詳細スキャン。`--target <file>` で絞り込み可）。件数だけなら `code-analyzer.yml` を直接見るのが速いです
+- 既存違反を修正したら、同じ PR で `pnpm run baseline` を実行して上限を下げます（ラチェット）
+- 件数が増える再生成はエラーで止まります。承知の上で取り込むときだけ `pnpm run baseline --allow-increase` を付けてください
+
 ### 手動デプロイ
 
 ```bash

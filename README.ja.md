@@ -164,6 +164,7 @@ CI/CD ワークフローは同期しない。GitHub は既定の Actions トー�
 - [Org とリポジトリの運用モデル](docs/org-model.ja.md) — 1リポ = 1本番 org、複数 Sandbox の扱い、衝突回避
 - [認証ガイド](docs/authentication.ja.md) — ローカル開発 vs CI/CD の認証方式、必要な権限
 - [JWT 認証セットアップ](docs/jwt-auth-setup.ja.md) — Connected App と GitHub Secrets の設定手順
+- [ロールバック手順](docs/rollback.ja.md) — 問題のある本番デプロイの取り消し方と、メタデータのロールバックでは戻らないもの
 
 ## ライセンス
 

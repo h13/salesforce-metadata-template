@@ -164,6 +164,7 @@ Dependencies are updated by [Renovate](https://docs.renovatebot.com/), configure
 - [Org and Repository Model](docs/org-model.md) — One repo per Production org, multiple Sandboxes, conflict avoidance
 - [Authentication Guide](docs/authentication.md) — Local vs CI/CD authentication, required permissions
 - [JWT Authentication Setup](docs/jwt-auth-setup.md) — Connected App and GitHub Secrets configuration
+- [Rollback Procedure](docs/rollback.md) — Reverting a bad production deploy, and what a metadata rollback cannot undo
 
 ## License
 

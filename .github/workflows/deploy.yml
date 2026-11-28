@@ -22,14 +22,15 @@ jobs:
   deploy:
     if: github.event.repository.is_template != true
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || 'sandbox' }}
+    # Full refs, not ref_name: a tag named "main" must not select production
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'sandbox' }}
     steps:
-      # workflow_dispatch can target any ref; deploys only ever run from the
-      # two branches that map to orgs, so refuse everything else
+      # workflow_dispatch can target any ref (including tags); deploys only
+      # ever run from the two branches that map to orgs, so refuse everything else
       - name: Refuse refs that do not map to an org
-        if: github.ref_name != 'main' && github.ref_name != 'sandbox'
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/sandbox'
         run: |
-          echo "::error::deploys run only from main or sandbox (got: $GITHUB_REF_NAME)"
+          echo "::error::deploys run only from the main or sandbox branch (got: $GITHUB_REF)"
           exit 1
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -52,11 +53,11 @@ jobs:
           SANDBOX_ID: ${{ vars.SANDBOX_ID }}
         run: |
           # A SANDBOX_ID / environment mismatch would derive an unintended org, so stop
-          if [ "$GITHUB_REF_NAME" != "main" ] && [ -z "$SANDBOX_ID" ]; then
+          if [ "$GITHUB_REF" != "refs/heads/main" ] && [ -z "$SANDBOX_ID" ]; then
             echo "::error::SANDBOX_ID is not set on the sandbox environment"
             exit 1
           fi
-          if [ "$GITHUB_REF_NAME" = "main" ] && [ -n "$SANDBOX_ID" ]; then
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ -n "$SANDBOX_ID" ]; then
             echo "::error::production environment must not define SANDBOX_ID"
             exit 1
           fi
@@ -83,11 +84,16 @@ jobs:
           # Explicit test level so behaviour never rides on Salesforce defaults:
           # production (main) runs local tests, sandbox runs none
           if [ "$TEST_LEVEL" = "policy" ]; then
-            if [ "$GITHUB_REF_NAME" = "main" ]; then
+            if [ "$GITHUB_REF" = "refs/heads/main" ]; then
               TEST_LEVEL=RunLocalTests
             else
               TEST_LEVEL=NoTestRun
             fi
+          fi
+          # Overrides may strengthen the production gate, never weaken it
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$TEST_LEVEL" = "NoTestRun" ]; then
+            echo "::error::NoTestRun is not allowed for production deploys"
+            exit 1
           fi
           ARGS=(--test-level "$TEST_LEVEL")
           if [ "$TEST_LEVEL" = "RunSpecifiedTests" ]; then

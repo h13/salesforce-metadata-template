@@ -113,11 +113,11 @@ pnpm run deploy <sandbox名>
 
 いずれのブランチへの PR も CI で dry-run 検証（`pnpm exec sf project deploy start --dry-run`）を実行。
 
-### 削除の反映
+### 差分デプロイと削除の反映
 
-Git で削除したメタデータは、同じデプロイで org からも削除される。CI が push されたコミット範囲から [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) で `destructiveChanges.xml` を生成し、（従来どおりの全量）デプロイに添えて 1 回のアトミックな操作として実行する。依存関係を壊す削除はデプロイ全体がロールバックされる。PR 検証では同じ削除を dry-run し、job summary に一覧を出す。
+push 時のデプロイは、そのブランチの最後に成功したデプロイ以降の変更分だけを送る。基準コミットは Deploy ワークフロー自身の実行履歴から読む（追加の状態管理なし）。マニフェストと `destructiveChanges.xml` は [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) で生成し、変更と削除を 1 回のアトミックなデプロイとして実行する。依存関係を壊す削除はデプロイ全体がロールバックされる。PR 検証では同じ差分を dry-run し、変更と削除の一覧を job summary に出す。
 
-注意点は 2 つ。ブランチ作成直後と force push は基準コミットが取れないため、その回だけ削除検出をスキップする（後続の削除コミットは通常どおり拾われる）。また `pnpm run deploy` による個人 sandbox へのデプロイでは削除は反映されない。
+基準が使えない場合（初回デプロイ・履歴の書き換え・古い run の再実行）は、削除なしの全量デプロイに自動フォールバックする。workflow_dispatch で全量デプロイを強制することもできる。`pnpm run deploy` による個人 sandbox へのデプロイは従来どおり全量のみで、削除は反映されない。
 
 ## プロジェクト構成
 

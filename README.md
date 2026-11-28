@@ -113,11 +113,11 @@ Production deploys happen only through CI/CD when changes are merged to `main`.
 
 PRs to either branch run dry-run validation (`pnpm exec sf project deploy start --dry-run`) in CI.
 
-### Deletions
+### Delta deployments and deletions
 
-Metadata deleted in Git is deleted from the org in the same deploy: CI generates a `destructiveChanges.xml` from the pushed commit range with [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) and attaches it to the (still full) deploy as one atomic operation — a deletion that breaks a dependency rolls the whole deploy back. PR validation dry-runs the same deletions and lists them in the job summary.
+Pushes deploy only what changed since the last successful deploy of that branch. CI reads the baseline commit from the Deploy workflow's own run history (no extra state) and generates the manifest and `destructiveChanges.xml` with [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta). Changes and deletions land as one atomic deploy — a deletion that breaks a dependency rolls everything back. PR validation dry-runs the same delta and lists the changes and deletions in the job summary.
 
-Two caveats: branch creation and force pushes have no reliable base commit, so deletion detection is skipped for that one run (a later deletion commit is picked up normally), and `pnpm run deploy` to a personal sandbox does not propagate deletions.
+When no baseline is usable (first deploy, rewritten history, or a re-run of an old run), CI falls back to a full deploy without deletions. A full deploy can also be forced via workflow_dispatch. `pnpm run deploy` to a personal sandbox stays a plain full deploy and does not propagate deletions.
 
 ## Project Structure
 

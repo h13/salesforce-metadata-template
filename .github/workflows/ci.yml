@@ -53,6 +53,10 @@ jobs:
     environment: sandbox
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # sfdx-git-delta diffs against the PR base, which a shallow clone
+          # may not contain
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
 
@@ -62,6 +66,32 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # Deletions in this PR must be validated too: generate
+      # destructiveChanges.xml against the merge base (docs: issue #62)
+      - name: Detect deletions
+        id: deletions
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        shell: bash
+        run: |
+          OUT="$RUNNER_TEMP/sgd"
+          mkdir -p "$OUT"
+          echo "dir=$OUT" >>"$GITHUB_OUTPUT"
+          BASE=$(git merge-base "origin/$BASE_REF" HEAD)
+          pnpm exec sf plugins link ./node_modules/sfdx-git-delta
+          pnpm exec sf sgd source delta --from "$BASE" --to HEAD --output-dir "$OUT"
+          if grep -q '<members>' "$OUT/destructiveChanges/destructiveChanges.xml"; then
+            echo "has-deletions=true" >>"$GITHUB_OUTPUT"
+            {
+              echo "## Deletions in this PR"
+              echo '```xml'
+              cat "$OUT/destructiveChanges/destructiveChanges.xml"
+              echo '```'
+            } >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "has-deletions=false" >>"$GITHUB_OUTPUT"
+          fi
 
       - name: Authenticate to Sandbox
         env:
@@ -88,4 +118,19 @@ jobs:
           rm server.key
 
       - name: Validate deployment (dry-run)
-        run: pnpm exec sf project deploy start --dry-run --target-org sandbox --wait 30
+        env:
+          HAS_DELETIONS: ${{ steps.deletions.outputs.has-deletions }}
+          SGD_DIR: ${{ steps.deletions.outputs.dir }}
+        shell: bash
+        run: |
+          if [ "$HAS_DELETIONS" = "true" ]; then
+            # Same shape as the real deploy: full manifest + destructive changes
+            pnpm exec sf project generate manifest \
+              --source-dir force-app/main/default --output-dir "$RUNNER_TEMP/manifest"
+            pnpm exec sf project deploy start --dry-run --target-org sandbox --wait 30 \
+              --manifest "$RUNNER_TEMP/manifest/package.xml" \
+              --post-destructive-changes "$SGD_DIR/destructiveChanges/destructiveChanges.xml" \
+              --ignore-warnings
+          else
+            pnpm exec sf project deploy start --dry-run --target-org sandbox --wait 30
+          fi

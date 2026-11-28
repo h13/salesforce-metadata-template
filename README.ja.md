@@ -113,6 +113,12 @@ pnpm run deploy <sandbox名>
 
 いずれのブランチへの PR も CI で dry-run 検証（`pnpm exec sf project deploy start --dry-run`）を実行。
 
+### 削除の反映
+
+Git で削除したメタデータは、同じデプロイで org からも削除される。CI が push されたコミット範囲から [sfdx-git-delta](https://github.com/scolladon/sfdx-git-delta) で `destructiveChanges.xml` を生成し、（従来どおりの全量）デプロイに添えて 1 回のアトミックな操作として実行する。依存関係を壊す削除はデプロイ全体がロールバックされる。PR 検証では同じ削除を dry-run し、job summary に一覧を出す。
+
+注意点は 2 つ。ブランチ作成直後と force push は基準コミットが取れないため、その回だけ削除検出をスキップする（後続の削除コミットは通常どおり拾われる）。また `pnpm run deploy` による個人 sandbox へのデプロイでは削除は反映されない。
+
 ## プロジェクト構成
 
 ```text

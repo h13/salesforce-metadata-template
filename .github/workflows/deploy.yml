@@ -14,6 +14,10 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'production' || 'sandbox' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # sfdx-git-delta diffs against the pre-push commit, which a shallow
+          # clone may not contain
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
 
@@ -23,6 +27,37 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # Deletions in Git must reach the org: generate destructiveChanges.xml
+      # for the pushed commit range (docs: issue #62)
+      - name: Detect deletions
+        id: deletions
+        env:
+          BEFORE: ${{ github.event.before }}
+        shell: bash
+        run: |
+          OUT="$RUNNER_TEMP/sgd"
+          mkdir -p "$OUT"
+          echo "dir=$OUT" >>"$GITHUB_OUTPUT"
+          # Branch creation and force pushes have no reliable base commit
+          if [ -z "$BEFORE" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            echo "::notice::No valid base commit; skipping deletion detection for this run"
+            echo "has-deletions=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          pnpm exec sf plugins link ./node_modules/sfdx-git-delta
+          pnpm exec sf sgd source delta --from "$BEFORE" --to "$GITHUB_SHA" --output-dir "$OUT"
+          if grep -q '<members>' "$OUT/destructiveChanges/destructiveChanges.xml"; then
+            echo "has-deletions=true" >>"$GITHUB_OUTPUT"
+            {
+              echo "## Deletions in this deploy"
+              echo '```xml'
+              cat "$OUT/destructiveChanges/destructiveChanges.xml"
+              echo '```'
+            } >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "has-deletions=false" >>"$GITHUB_OUTPUT"
+          fi
 
       - name: Authenticate
         env:
@@ -57,4 +92,23 @@ jobs:
           rm server.key
 
       - name: Deploy
-        run: pnpm exec sf project deploy start --target-org target-org --wait 30
+        env:
+          HAS_DELETIONS: ${{ steps.deletions.outputs.has-deletions }}
+          SGD_DIR: ${{ steps.deletions.outputs.dir }}
+        shell: bash
+        run: |
+          if [ "$HAS_DELETIONS" = "true" ]; then
+            # Destructive changes require a manifest deploy; the generated
+            # manifest spans all of force-app, so this is still a full deploy.
+            # One atomic deploy: a deletion that breaks a dependency rolls
+            # everything back. --ignore-warnings keeps re-runs idempotent
+            # when a component is already gone from the org.
+            pnpm exec sf project generate manifest \
+              --source-dir force-app/main/default --output-dir "$RUNNER_TEMP/manifest"
+            pnpm exec sf project deploy start --target-org target-org --wait 30 \
+              --manifest "$RUNNER_TEMP/manifest/package.xml" \
+              --post-destructive-changes "$SGD_DIR/destructiveChanges/destructiveChanges.xml" \
+              --ignore-warnings
+          else
+            pnpm exec sf project deploy start --target-org target-org --wait 30
+          fi

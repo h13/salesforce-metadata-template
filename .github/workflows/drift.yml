@@ -1,0 +1,115 @@
+name: Drift Detection
+
+# GUI changes that nobody retrieves make the org drift from main.
+# Retrieve from the shared sandbox into a clean checkout of main, diff,
+# and surface any drift as an issue. Never auto-commits.
+
+on:
+  schedule:
+    - cron: '0 20 * * *' # daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    if: github.event.repository.is_template != true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    # Uses the sandbox environment's SF_JWT_KEY / SANDBOX_ID; connection values
+    # are derived from production-origin repository variables (docs/jwt-auth-setup.md)
+    environment: sandbox
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Authenticate to Sandbox
+        env:
+          SF_CLIENT_ID: ${{ vars.SF_CLIENT_ID }}
+          SF_JWT_KEY: ${{ secrets.SF_JWT_KEY }}
+          SF_MY_DOMAIN: ${{ vars.SF_MY_DOMAIN }}
+          SF_CI_USERNAME: ${{ vars.SF_CI_USERNAME }}
+          SANDBOX_ID: ${{ vars.SANDBOX_ID }}
+        run: |
+          # Without SANDBOX_ID the derivation would point at production, so stop
+          if [ -z "$SANDBOX_ID" ]; then
+            echo "::error::SANDBOX_ID is not set on the sandbox environment"
+            exit 1
+          fi
+          SF_USERNAME="${SF_CI_USERNAME}.${SANDBOX_ID}"
+          SF_INSTANCE_URL="https://${SF_MY_DOMAIN}--${SANDBOX_ID}.sandbox.my.salesforce.com"
+          echo "$SF_JWT_KEY" > server.key
+          pnpm exec sf org login jwt \
+            --client-id "$SF_CLIENT_ID" \
+            --jwt-key-file server.key \
+            --username "$SF_USERNAME" \
+            --instance-url "$SF_INSTANCE_URL" \
+            --alias sandbox
+          rm server.key
+
+      - name: Retrieve and diff against main
+        id: diff
+        shell: bash
+        run: |
+          pnpm exec sf project retrieve start --target-org sandbox --wait 60
+          # Porcelain output covers modified and untracked files under force-app
+          git status --porcelain force-app >/tmp/drift-status.txt
+          if [ ! -s /tmp/drift-status.txt ]; then
+            echo "drift=false" >>"$GITHUB_OUTPUT"
+            echo "No drift detected"
+          else
+            echo "drift=true" >>"$GITHUB_OUTPUT"
+            git diff --stat -- force-app >/tmp/drift-diffstat.txt
+            {
+              echo "The shared sandbox has changes that are not on \`main\`."
+              echo "Someone changed the org through the GUI without retrieving."
+              echo ""
+              echo "Run \`pnpm run retrieve\`, review the diff, and open a PR — or revert the org change."
+              echo ""
+              echo '```text'
+              head -50 /tmp/drift-status.txt
+              echo ""
+              tail -30 /tmp/drift-diffstat.txt
+              echo '```'
+              echo ""
+              echo "_Last checked: $(date -u +%Y-%m-%dT%H:%M:%SZ) ([workflow run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}))_"
+            } >/tmp/drift-body.md
+          fi
+
+      - name: Open or update the drift issue
+        if: steps.diff.outputs.drift == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Org drift detected: shared sandbox differs from main'
+        run: |
+          existing=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file /tmp/drift-body.md
+            echo "Updated issue #$existing"
+          else
+            gh issue create --title "$TITLE" --body-file /tmp/drift-body.md
+          fi
+
+      - name: Close the drift issue when clean
+        if: steps.diff.outputs.drift == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Org drift detected: shared sandbox differs from main'
+        run: |
+          existing=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "Drift resolved: the shared sandbox matches \`main\` again."
+          fi

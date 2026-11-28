@@ -3,20 +3,44 @@ name: Deploy
 on:
   push:
     branches: [sandbox, main]
+  workflow_dispatch:
+    inputs:
+      full-deploy:
+        description: 'Deploy all of force-app instead of the delta'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+# Serialize deploys per branch: parallel runs could apply older content
+# over newer. Queued runs wait instead of cancelling the one in progress.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
     if: github.event.repository.is_template != true
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || 'sandbox' }}
+    permissions:
+      contents: read
+      actions: read # to look up the last successful deploy run
+    # Full refs, not ref_name: a tag named "main" must not select production
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'sandbox' }}
     steps:
+      # workflow_dispatch can target any ref (including tags); deploys only
+      # ever run from the two branches that map to orgs, so refuse everything else
+      - name: Refuse refs that do not map to an org
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/sandbox'
+        run: |
+          echo "::error::deploys run only from the main or sandbox branch (got: $GITHUB_REF)"
+          exit 1
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # sfdx-git-delta diffs against the pre-push commit, which a shallow
-          # clone may not contain
+          # sfdx-git-delta diffs against the last deployed commit, which a
+          # shallow clone may not contain
           fetch-depth: 0
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
@@ -28,38 +52,65 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Deletions in Git must reach the org: generate destructiveChanges.xml
-      # for the pushed commit range (docs: issue #62)
-      - name: Detect deletions
-        id: deletions
+      # Deploy only what changed since the last successful deploy of this
+      # branch (issues #51, #62). The baseline is read from the workflow run
+      # history, so nothing extra is stored. Falls back to a full deploy when
+      # no baseline is usable; deletions ride along as destructiveChanges.
+      - name: Compute delta
+        id: delta
         env:
-          BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+          FULL_INPUT: ${{ github.event.inputs.full-deploy || 'false' }}
         shell: bash
         run: |
           OUT="$RUNNER_TEMP/sgd"
           mkdir -p "$OUT"
           echo "dir=$OUT" >>"$GITHUB_OUTPUT"
-          # Branch creation and force pushes have no reliable base commit
-          if [ -z "$BEFORE" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
-            echo "::notice::No valid base commit; skipping deletion detection for this run"
-            echo "has-deletions=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-          pnpm exec sf plugins link ./node_modules/sfdx-git-delta
-          pnpm exec sf sgd source delta --from "$BEFORE" --to "$GITHUB_SHA" --output-dir "$OUT"
-          if grep -q '<members>' "$OUT/destructiveChanges/destructiveChanges.xml"; then
-            echo "has-deletions=true" >>"$GITHUB_OUTPUT"
-            {
-              echo "## Deletions in this deploy"
-              echo '```xml'
-              cat "$OUT/destructiveChanges/destructiveChanges.xml"
-              echo '```'
-            } >>"$GITHUB_STEP_SUMMARY"
+          MODE="full"
+          if [ "$FULL_INPUT" = "true" ]; then
+            echo "::notice::Full deploy requested via workflow_dispatch"
           else
-            echo "has-deletions=false" >>"$GITHUB_OUTPUT"
+            BASE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=$GITHUB_REF_NAME&status=success&per_page=1" \
+              --jq '.workflow_runs[0].head_sha // empty' || true)
+            # The baseline must exist locally, differ from HEAD, and be an
+            # ancestor of HEAD. The ancestor check rejects rewritten history
+            # AND re-runs of old runs — there the baseline is NEWER than HEAD,
+            # and diffing backwards would emit deletions of newer components.
+            if [ -n "$BASE" ] && [ "$BASE" != "$GITHUB_SHA" ] \
+              && git cat-file -e "$BASE" 2>/dev/null \
+              && git merge-base --is-ancestor "$BASE" "$GITHUB_SHA"; then
+              pnpm exec sf plugins link ./node_modules/sfdx-git-delta
+              pnpm exec sf sgd source delta --from "$BASE" --to "$GITHUB_SHA" --output-dir "$OUT"
+              MODE="delta"
+              echo "Delta base: $BASE"
+            else
+              echo "::notice::No usable baseline (first deploy, rewritten history, or re-run of an old run); falling back to a full deploy"
+            fi
           fi
+          echo "mode=$MODE" >>"$GITHUB_OUTPUT"
+          HAS_CHANGES=false
+          HAS_DELETIONS=false
+          if [ "$MODE" = "delta" ]; then
+            grep -q '<members>' "$OUT/package/package.xml" && HAS_CHANGES=true
+            grep -q '<members>' "$OUT/destructiveChanges/destructiveChanges.xml" && HAS_DELETIONS=true
+            {
+              echo "## Delta deploy"
+              echo '```xml'
+              cat "$OUT/package/package.xml"
+              echo '```'
+              if [ "$HAS_DELETIONS" = "true" ]; then
+                echo "### Deletions"
+                echo '```xml'
+                cat "$OUT/destructiveChanges/destructiveChanges.xml"
+                echo '```'
+              fi
+            } >>"$GITHUB_STEP_SUMMARY"
+          fi
+          echo "has-changes=$HAS_CHANGES" >>"$GITHUB_OUTPUT"
+          echo "has-deletions=$HAS_DELETIONS" >>"$GITHUB_OUTPUT"
 
       - name: Authenticate
+        if: steps.delta.outputs.mode == 'full' || steps.delta.outputs.has-changes == 'true' || steps.delta.outputs.has-deletions == 'true'
         env:
           SF_CLIENT_ID: ${{ vars.SF_CLIENT_ID }}
           SF_JWT_KEY: ${{ secrets.SF_JWT_KEY }}
@@ -68,11 +119,11 @@ jobs:
           SANDBOX_ID: ${{ vars.SANDBOX_ID }}
         run: |
           # A SANDBOX_ID / environment mismatch would derive an unintended org, so stop
-          if [ "$GITHUB_REF_NAME" != "main" ] && [ -z "$SANDBOX_ID" ]; then
+          if [ "$GITHUB_REF" != "refs/heads/main" ] && [ -z "$SANDBOX_ID" ]; then
             echo "::error::SANDBOX_ID is not set on the sandbox environment"
             exit 1
           fi
-          if [ "$GITHUB_REF_NAME" = "main" ] && [ -n "$SANDBOX_ID" ]; then
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ -n "$SANDBOX_ID" ]; then
             echo "::error::production environment must not define SANDBOX_ID"
             exit 1
           fi
@@ -93,22 +144,27 @@ jobs:
 
       - name: Deploy
         env:
-          HAS_DELETIONS: ${{ steps.deletions.outputs.has-deletions }}
-          SGD_DIR: ${{ steps.deletions.outputs.dir }}
+          MODE: ${{ steps.delta.outputs.mode }}
+          HAS_CHANGES: ${{ steps.delta.outputs.has-changes }}
+          HAS_DELETIONS: ${{ steps.delta.outputs.has-deletions }}
+          SGD_DIR: ${{ steps.delta.outputs.dir }}
         shell: bash
         run: |
-          if [ "$HAS_DELETIONS" = "true" ]; then
-            # Destructive changes require a manifest deploy; the generated
-            # manifest spans all of force-app, so this is still a full deploy.
-            # One atomic deploy: a deletion that breaks a dependency rolls
-            # everything back. --ignore-warnings keeps re-runs idempotent
-            # when a component is already gone from the org.
-            pnpm exec sf project generate manifest \
-              --source-dir force-app/main/default --output-dir "$RUNNER_TEMP/manifest"
-            pnpm exec sf project deploy start --target-org target-org --wait 30 \
-              --manifest "$RUNNER_TEMP/manifest/package.xml" \
-              --post-destructive-changes "$SGD_DIR/destructiveChanges/destructiveChanges.xml" \
-              --ignore-warnings
+          if [ "$MODE" = "delta" ]; then
+            if [ "$HAS_CHANGES" != "true" ] && [ "$HAS_DELETIONS" != "true" ]; then
+              echo "No metadata changes since the last deploy; nothing to do"
+              exit 0
+            fi
+            # One atomic deploy: changed components plus deletions. A deletion
+            # that breaks a dependency rolls the whole deploy back.
+            # --ignore-warnings keeps re-runs idempotent when a component is
+            # already gone from the org.
+            ARGS=(--manifest "$SGD_DIR/package/package.xml")
+            if [ "$HAS_DELETIONS" = "true" ]; then
+              ARGS+=(--post-destructive-changes "$SGD_DIR/destructiveChanges/destructiveChanges.xml" --ignore-warnings)
+            fi
+            pnpm exec sf project deploy start --target-org target-org --wait 30 "${ARGS[@]}"
           else
+            # Full deploy: everything currently in force-app, no deletions
             pnpm exec sf project deploy start --target-org target-org --wait 30
           fi

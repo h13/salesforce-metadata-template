@@ -67,10 +67,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Deletions in this PR must be validated too: generate
-      # destructiveChanges.xml against the merge base (docs: issue #62)
-      - name: Detect deletions
-        id: deletions
+      # Validate the same shape a merge will deploy: the delta against the
+      # merge base, deletions included (issues #51, #62)
+      - name: Compute delta
+        id: delta
         env:
           BASE_REF: ${{ github.base_ref }}
         shell: bash
@@ -81,19 +81,27 @@ jobs:
           BASE=$(git merge-base "origin/$BASE_REF" HEAD)
           pnpm exec sf plugins link ./node_modules/sfdx-git-delta
           pnpm exec sf sgd source delta --from "$BASE" --to HEAD --output-dir "$OUT"
-          if grep -q '<members>' "$OUT/destructiveChanges/destructiveChanges.xml"; then
-            echo "has-deletions=true" >>"$GITHUB_OUTPUT"
-            {
-              echo "## Deletions in this PR"
+          HAS_CHANGES=false
+          HAS_DELETIONS=false
+          grep -q '<members>' "$OUT/package/package.xml" && HAS_CHANGES=true
+          grep -q '<members>' "$OUT/destructiveChanges/destructiveChanges.xml" && HAS_DELETIONS=true
+          echo "has-changes=$HAS_CHANGES" >>"$GITHUB_OUTPUT"
+          echo "has-deletions=$HAS_DELETIONS" >>"$GITHUB_OUTPUT"
+          {
+            echo "## Metadata changes in this PR"
+            echo '```xml'
+            cat "$OUT/package/package.xml"
+            echo '```'
+            if [ "$HAS_DELETIONS" = "true" ]; then
+              echo "### Deletions"
               echo '```xml'
               cat "$OUT/destructiveChanges/destructiveChanges.xml"
               echo '```'
-            } >>"$GITHUB_STEP_SUMMARY"
-          else
-            echo "has-deletions=false" >>"$GITHUB_OUTPUT"
-          fi
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Authenticate to Sandbox
+        if: steps.delta.outputs.has-changes == 'true' || steps.delta.outputs.has-deletions == 'true'
         env:
           SF_CLIENT_ID: ${{ vars.SF_CLIENT_ID }}
           SF_JWT_KEY: ${{ secrets.SF_JWT_KEY }}
@@ -119,18 +127,17 @@ jobs:
 
       - name: Validate deployment (dry-run)
         env:
-          HAS_DELETIONS: ${{ steps.deletions.outputs.has-deletions }}
-          SGD_DIR: ${{ steps.deletions.outputs.dir }}
+          HAS_CHANGES: ${{ steps.delta.outputs.has-changes }}
+          HAS_DELETIONS: ${{ steps.delta.outputs.has-deletions }}
+          SGD_DIR: ${{ steps.delta.outputs.dir }}
         shell: bash
         run: |
-          if [ "$HAS_DELETIONS" = "true" ]; then
-            # Same shape as the real deploy: full manifest + destructive changes
-            pnpm exec sf project generate manifest \
-              --source-dir force-app/main/default --output-dir "$RUNNER_TEMP/manifest"
-            pnpm exec sf project deploy start --dry-run --target-org sandbox --wait 30 \
-              --manifest "$RUNNER_TEMP/manifest/package.xml" \
-              --post-destructive-changes "$SGD_DIR/destructiveChanges/destructiveChanges.xml" \
-              --ignore-warnings
-          else
-            pnpm exec sf project deploy start --dry-run --target-org sandbox --wait 30
+          if [ "$HAS_CHANGES" != "true" ] && [ "$HAS_DELETIONS" != "true" ]; then
+            echo "No metadata changes in this PR; skipping the dry-run"
+            exit 0
           fi
+          ARGS=(--manifest "$SGD_DIR/package/package.xml")
+          if [ "$HAS_DELETIONS" = "true" ]; then
+            ARGS+=(--post-destructive-changes "$SGD_DIR/destructiveChanges/destructiveChanges.xml" --ignore-warnings)
+          fi
+          pnpm exec sf project deploy start --dry-run --target-org sandbox --wait 30 "${ARGS[@]}"

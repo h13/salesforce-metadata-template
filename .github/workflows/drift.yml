@@ -1,8 +1,11 @@
 name: Drift Detection
 
-# GUI changes that nobody retrieves make the org drift from main.
-# Retrieve from the shared sandbox into a clean checkout of main, diff,
-# and surface any drift as an issue. Never auto-commits.
+# GUI changes that nobody retrieves make the shared sandbox drift from the
+# sandbox branch — the invariant is "the org only ever changes via deploys
+# from that branch". The sandbox org being ahead of main is normal (work not
+# yet promoted), so main is NOT the baseline here. Retrieve from the shared
+# sandbox into a clean checkout of the sandbox branch, diff, and surface any
+# drift as an issue. Never auto-commits.
 
 on:
   schedule:
@@ -25,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: main
+          ref: sandbox
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
 
@@ -60,7 +63,7 @@ jobs:
             --alias sandbox
           rm server.key
 
-      - name: Retrieve and diff against main
+      - name: Retrieve and diff against the sandbox branch
         id: diff
         shell: bash
         run: |
@@ -74,10 +77,10 @@ jobs:
             echo "drift=true" >>"$GITHUB_OUTPUT"
             git diff --stat -- force-app >/tmp/drift-diffstat.txt
             {
-              echo "The shared sandbox has changes that are not on \`main\`."
-              echo "Someone changed the org through the GUI without retrieving."
+              echo "The shared sandbox has changes that are not on the \`sandbox\` branch."
+              echo "Someone changed the org through the GUI without retrieving (or a deploy did not land)."
               echo ""
-              echo "Run \`pnpm run retrieve\`, review the diff, and open a PR — or revert the org change."
+              echo "Run \`pnpm run retrieve\`, review the diff, and open a PR to \`sandbox\` — or revert the org change."
               echo ""
               echo '```text'
               head -50 /tmp/drift-status.txt
@@ -93,7 +96,7 @@ jobs:
         if: steps.diff.outputs.drift == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TITLE: 'Org drift detected: shared sandbox differs from main'
+          TITLE: 'Org drift detected: shared sandbox differs from the sandbox branch'
         run: |
           existing=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
@@ -107,9 +110,9 @@ jobs:
         if: steps.diff.outputs.drift == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-          TITLE: 'Org drift detected: shared sandbox differs from main'
+          TITLE: 'Org drift detected: shared sandbox differs from the sandbox branch'
         run: |
           existing=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
-            gh issue close "$existing" --comment "Drift resolved: the shared sandbox matches \`main\` again."
+            gh issue close "$existing" --comment "Drift resolved: the shared sandbox matches the \`sandbox\` branch again."
           fi

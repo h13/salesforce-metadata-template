@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 抑止（ベースライン）を無効化した詳細スキャン。既存違反の内容を見るために使う。
-# 追加引数はそのまま sf code-analyzer run に渡る（例: --target <file>）。
+# Detailed scan with suppressions (the baseline) disabled. Use it to inspect
+# the content of existing violations.
+# Extra arguments are passed through to sf code-analyzer run
+# (e.g. --target <file>).
 
-# Java は PMD エンジンの要件。.mise.toml で宣言している
+# Java is required by the PMD engine; declared in .mise.toml
 if ! java -version >/dev/null 2>&1; then
-  echo "Java が見つかりません。mise install を実行してください" >&2
+  echo "Java not found. Run: mise install" >&2
   exit 1
 fi
 

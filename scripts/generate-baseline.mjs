@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// Code Analyzer のベースライン (code-analyzer.yml の suppressions) を
-// 違反結果 JSON から生成する。入口は pnpm run baseline（抑止を無効化して
-// スキャンし、その結果を本スクリプトに渡す）。
-// 抑止後の結果（通常スキャンや CI 成果物）を渡すと 0 件になるので使わないこと。
+// Generate the Code Analyzer baseline (the suppressions in code-analyzer.yml)
+// from a violation results JSON. The entry point is pnpm run baseline, which
+// scans with suppressions disabled and feeds the results to this script.
+// Never feed it post-suppression results (a normal scan or a CI artifact):
+// those would always yield 0 violations.
 //
-// ラチェット保護: 既存の code-analyzer.yml より件数が増える場合はエラーで
-// 止まる。増加を承知で取り込むときだけ --allow-increase を付ける。
+// Ratchet protection: if any count would rise above the existing
+// code-analyzer.yml, the script stops with an error. Pass --allow-increase
+// only when the increase is intended.
 import fs from 'node:fs';
 import process from 'node:process';
 
@@ -19,7 +21,7 @@ if (!jsonPath) {
 }
 
 const OUT = 'code-analyzer.yml';
-// CI は全 severity で fail するので、全件を固定する
+// CI fails on every severity, so pin all of them
 const GATED_SEVERITY = 5;
 
 const results = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
@@ -32,7 +34,7 @@ const counts = results.violations
     return { ...acc, [key]: (acc[key] ?? 0) + 1 };
   }, {});
 
-// ラチェット保護: 既存ベースラインと比較して、増える変更を検出する
+// Ratchet protection: compare against the existing baseline and detect increases
 if (fs.existsSync(OUT) && !allowIncrease) {
   const current = fs.readFileSync(OUT, 'utf8');
   const existing = {};
@@ -48,12 +50,12 @@ if (fs.existsSync(OUT) && !allowIncrease) {
   }
   const increases = Object.entries(counts).filter(([key, n]) => n > (existing[key] ?? 0));
   if (increases.length > 0) {
-    log('ベースラインが増える変更が含まれています（新規違反の疑い）:');
+    log('This regeneration would raise the baseline (possible new violations):');
     for (const [key, n] of increases) {
       const [f, r] = key.split('\u0000');
       log(`  ${r} ${f}: ${existing[key] ?? 0} -> ${n}`);
     }
-    log('取り込む場合は --allow-increase を付けて再実行してください。');
+    log('Re-run with --allow-increase to accept the increase.');
     process.exit(1);
   }
 }
@@ -63,10 +65,12 @@ const byFile = Object.entries(counts).reduce((acc, [key, n]) => {
   return { ...acc, [file]: [...(acc[file] ?? []), { rule, n }] };
 }, {});
 
-const header = `# Salesforce Code Analyzer 設定。
-# suppressions は既存違反のベースライン。容認ではなく返済対象。
-# - 各上限は生成時点の違反数ちょうど。上限を超えた分＝新規違反だけが CI で fail する
-# - 違反を修正したら同じ PR で上限を下げる。再生成は scripts/generate-baseline.mjs
+const header = `# Salesforce Code Analyzer config.
+# suppressions is the baseline of existing violations: debt to repay, not acceptance.
+# - Each cap equals the violation count at generation time. Only violations
+#   beyond a cap (= new violations) fail CI
+# - When you fix an existing violation, lower the cap in the same PR.
+#   Regenerate with scripts/generate-baseline.mjs
 suppressions:
 `;
 
@@ -77,7 +81,7 @@ const body = Object.keys(byFile)
       .toSorted((a, b) => a.rule.localeCompare(b.rule))
       .map(
         ({ rule, n }) =>
-          `    - rule_selector: '${rule}'\n      max_suppressed_violations: ${n}\n      reason: '既存違反のベースライン'`
+          `    - rule_selector: '${rule}'\n      max_suppressed_violations: ${n}\n      reason: 'Baseline of existing violations'`
       )
       .join('\n');
     return `  '${file}':\n${rules}`;
@@ -87,5 +91,5 @@ const body = Object.keys(byFile)
 fs.writeFileSync(OUT, header + body + '\n');
 const total = Object.values(counts).reduce((a, b) => a + b, 0);
 log(
-  `${OUT} を生成: ${Object.keys(byFile).length}ファイル / ${Object.keys(counts).length}組 / ${total}件`
+  `Generated ${OUT}: ${Object.keys(byFile).length} files / ${Object.keys(counts).length} pairs / ${total} violations`
 );

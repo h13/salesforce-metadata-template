@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# sandbox への web ログイン。エイリアス = sandbox名 で登録する
+# Web login to a sandbox. Registers the alias as the sandbox name itself.
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/org.sh"
 
-NAME="${1:?使い方: pnpm run login <sandbox名>}"
+NAME="${1:?usage: pnpm run login <sandbox-name>}"
 
-# URL のホスト名に入るため検証する
+# Validated because it becomes part of the URL hostname
 if ! [[ "$NAME" =~ ^[A-Za-z0-9]{1,10}$ ]]; then
-  echo "sandbox名は英数字のみ（最大10文字）: $NAME" >&2
+  echo "Sandbox name must be alphanumeric (max 10 chars): $NAME" >&2
   exit 1
 fi
 
 if pnpm exec sf org display --target-org "$NAME" >/dev/null 2>&1; then
-  echo "認証済み: $NAME" >&2
+  echo "Already authenticated: $NAME" >&2
   exit 0
 fi
 

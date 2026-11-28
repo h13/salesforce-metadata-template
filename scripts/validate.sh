@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# デプロイ前の dry-run 検証
+# Dry-run validation before pushing
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/org.sh"

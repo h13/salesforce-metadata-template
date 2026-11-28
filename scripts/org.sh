@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# shellcheck disable=SC2034  # 変数は source 元の script が使う
-# 組織ごとの値。テンプレートからリポジトリを作成したら書き換える
-# （scripts/ はテンプレート同期の対象外なので、書き換えても上書きされない）
-MY_DOMAIN="your-company"     # https://<MY_DOMAIN>.my.salesforce.com の My Domain 名
-SHARED_SANDBOX="integration" # CI の検証と自動デプロイが使う共有 sandbox 名
+# shellcheck disable=SC2034  # Variables are used by the sourcing scripts
+# Per-org values. Edit these after creating a repository from the template
+# (scripts/ is excluded from template sync, so edits are never overwritten).
+MY_DOMAIN="your-company"     # My Domain name in https://<MY_DOMAIN>.my.salesforce.com
+SHARED_SANDBOX="integration" # Shared sandbox name used by CI validation and auto-deploys

@@ -2,7 +2,8 @@
 
 [![CI](https://github.com/h13/salesforce-metadata-template/actions/workflows/ci.yml/badge.svg)](https://github.com/h13/salesforce-metadata-template/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/h13/salesforce-metadata-template/blob/main/LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-26-green.svg)](https://nodejs.org/)
+[![Java](https://img.shields.io/badge/Java-Temurin%2025-ED8B00.svg)](https://adoptium.net/)
 [![Salesforce](https://img.shields.io/badge/Salesforce-CLI-00A1E0.svg)](https://developer.salesforce.com/tools/salesforcecli)
 
 [English](README.md)
@@ -21,7 +22,7 @@ Salesforce org には宣言的カスタマイズ（フロー、オブジェク�
 
 すべてのメタデータを Git に取り込む。CI で人間と AI の両方の変更を org に反映する前に検証する。
 
-```
+```text
 GUI 変更      → sf retrieve → Git → PR → CI validate → merge → deploy
 AI Agent 編集 → Git に直接   → PR → CI validate → merge → deploy
 ```
@@ -32,7 +33,7 @@ AI Agent 編集 → Git に直接   → PR → CI validate → merge → deploy
 
 ### 前提条件
 
-- [mise](https://mise.jdx.dev/)（Node.js バージョン管理）
+- [mise](https://mise.jdx.dev/)（Node.js と Java のバージョン管理。Java は code analyzer の PMD エンジンに必要）
 - [pnpm](https://pnpm.io/)
 
 [Salesforce CLI](https://developer.salesforce.com/tools/salesforcecli) は devDependency として同梱されているため、グローバルインストールは不要。`pnpm install` 後に `pnpm exec sf ...` で実行する。
@@ -114,7 +115,7 @@ pnpm run deploy <sandbox名>
 
 ## プロジェクト構成
 
-```
+```text
 salesforce-metadata-template/
 ├── force-app/main/default/   # Salesforce メタデータ（ソース形式）
 │   ├── flows/                # フロー定義
@@ -127,15 +128,17 @@ salesforce-metadata-template/
 │   ├── retrieve.sh           # GUI 変更取得ヘルパー
 │   ├── login.sh              # sandbox への web ログイン
 │   ├── deploy.sh             # 個人 sandbox へのデプロイ
-│   └── validate.sh           # dry-run 検証
+│   ├── validate.sh           # dry-run 検証
+│   ├── baseline.sh           # code-analyzer ベースライン再生成
+│   └── scan-all.sh           # 抑止無効のフルスキャン
 ├── .github/workflows/
 │   ├── ci.yml                # PR バリデーション（dry-run deploy）
 │   ├── deploy.yml            # push 時の自動デプロイ
 │   └── sync-template.yml     # 週次テンプレート同期
 ├── docs/                     # セットアップドキュメント
 ├── sfdx-project.json         # Salesforce プロジェクト設定（API v67.0）
-├── .mise.toml                # sf CLI + Node.js バージョン管理
-└── package.json              # CI ツール（oxlint, oxfmt）
+├── .mise.toml                # Node.js・Java バージョン管理
+└── package.json              # sf CLI + CI ツール（oxlint, oxfmt, prettier）
 ```
 
 ## CI/CD 認証

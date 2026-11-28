@@ -8,7 +8,7 @@ This document explains how this template relates to Salesforce orgs, how to hand
 
 Each repository created from this template manages **one Production org**. This is the single source of truth for that org's metadata.
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │  Git Repository                             │
 │                                             │
@@ -25,7 +25,7 @@ Even if your organization has multiple Sandboxes (e.g., `bear`, `flamingo`, `dev
 
 If multiple repositories deploy to the same Production org, the last deploy wins. This causes silent overwrites:
 
-```
+```text
 Repo A deploys Profile X with Permission Set A  ──► Production
 Repo B deploys Profile X with Permission Set B  ──► Production (overwrites A)
 ```
@@ -60,7 +60,7 @@ The CI pipeline deploys to **one shared Sandbox** (configured in GitHub Secrets)
 
 ## Branching and Deployment Flow
 
-```
+```text
 Developer A ──► feature/add-approval-flow ──┐
                                             ├──► PR to sandbox ──► CI validates ──► merge
 Developer B ──► feature/update-objects ─────┘

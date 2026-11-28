@@ -6,7 +6,7 @@ CI/CD から Salesforce org にデプロイするための JWT Bearer Flow の�
 
 ## 概要
 
-```
+```text
 GitHub Actions → JWT で認証（CI 専用ユーザーとして） → Salesforce org にデプロイ
 ```
 
@@ -146,7 +146,7 @@ pnpm exec sf org login jwt \
 
 成功すると以下が表示される:
 
-```
+```text
 Successfully authorized github-ci@company.com.sandboxname with org ID 00D...
 ```
 

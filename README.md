@@ -2,7 +2,8 @@
 
 [![CI](https://github.com/h13/salesforce-metadata-template/actions/workflows/ci.yml/badge.svg)](https://github.com/h13/salesforce-metadata-template/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/h13/salesforce-metadata-template/blob/main/LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-26-green.svg)](https://nodejs.org/)
+[![Java](https://img.shields.io/badge/Java-Temurin%2025-ED8B00.svg)](https://adoptium.net/)
 [![Salesforce](https://img.shields.io/badge/Salesforce-CLI-00A1E0.svg)](https://developer.salesforce.com/tools/salesforcecli)
 
 [日本語](README.ja.md)
@@ -21,7 +22,7 @@ Salesforce orgs accumulate declarative customizations — flows, objects, permis
 
 Pull all metadata into Git. Let CI validate every change (human or AI) before it reaches an org.
 
-```
+```text
 GUI changes   → sf retrieve → Git → PR → CI validate → merge → deploy
 AI Agent edits → Git directly → PR → CI validate → merge → deploy
 ```
@@ -32,7 +33,7 @@ Both paths converge on the same `force-app/` directory and the same CI pipeline.
 
 ### Prerequisites
 
-- [mise](https://mise.jdx.dev/) (manages the Node.js version)
+- [mise](https://mise.jdx.dev/) (manages the Node.js and Java versions — Java is required by the code analyzer's PMD engine)
 - [pnpm](https://pnpm.io/)
 
 The [Salesforce CLI](https://developer.salesforce.com/tools/salesforcecli) is bundled as a devDependency — no global install needed. Run it with `pnpm exec sf ...` after `pnpm install`.
@@ -114,7 +115,7 @@ PRs to either branch run dry-run validation (`pnpm exec sf project deploy start 
 
 ## Project Structure
 
-```
+```text
 salesforce-metadata-template/
 ├── force-app/main/default/   # Salesforce metadata (source format)
 │   ├── flows/                # Flow definitions
@@ -127,15 +128,17 @@ salesforce-metadata-template/
 │   ├── retrieve.sh           # GUI change retrieval helper
 │   ├── login.sh              # Web login to a sandbox
 │   ├── deploy.sh             # Deploy to a personal sandbox
-│   └── validate.sh           # Dry-run validation
+│   ├── validate.sh           # Dry-run validation
+│   ├── baseline.sh           # Regenerate the code-analyzer baseline
+│   └── scan-all.sh           # Full scan with suppressions disabled
 ├── .github/workflows/
 │   ├── ci.yml                # PR validation (dry-run deploy)
 │   ├── deploy.yml            # Auto-deploy on push
 │   └── sync-template.yml     # Weekly template sync
 ├── docs/                     # Setup documentation
 ├── sfdx-project.json         # Salesforce project config (API v67.0)
-├── .mise.toml                # sf CLI + Node.js version management
-└── package.json              # CI tooling (oxlint, oxfmt)
+├── .mise.toml                # Node.js / Java version management
+└── package.json              # sf CLI + CI tooling (oxlint, oxfmt, prettier)
 ```
 
 ## CI/CD Authentication

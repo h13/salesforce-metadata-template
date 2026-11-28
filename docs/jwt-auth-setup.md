@@ -6,7 +6,7 @@ Step-by-step guide to configure JWT Bearer Flow for CI/CD deployment to Salesfor
 
 ## Overview
 
-```
+```text
 GitHub Actions → JWT authentication (as a dedicated CI user) → Deploy to Salesforce org
 ```
 
@@ -147,7 +147,7 @@ pnpm exec sf org login jwt \
 
 On success:
 
-```
+```text
 Successfully authorized github-ci@company.com.sandboxname with org ID 00D...
 ```
 

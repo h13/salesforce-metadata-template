@@ -113,6 +113,17 @@ Production deploys happen only through CI/CD when changes are merged to `main`.
 
 PRs to either branch run dry-run validation (`pnpm exec sf project deploy start --dry-run`) in CI.
 
+### Test levels
+
+Deploys state their Apex test level explicitly instead of relying on Salesforce defaults:
+
+| Target     | Test level      |
+| ---------- | --------------- |
+| Production | `RunLocalTests` |
+| Sandbox    | `NoTestRun`     |
+
+For incidents, the Deploy workflow can be run manually (workflow_dispatch) with an overridden test level, including `RunSpecifiedTests` plus a comma-separated list of test classes.
+
 ## Project Structure
 
 ```text

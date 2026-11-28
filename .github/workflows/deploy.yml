@@ -3,6 +3,17 @@ name: Deploy
 on:
   push:
     branches: [sandbox, main]
+  workflow_dispatch:
+    inputs:
+      test-level:
+        description: 'Override the test level (policy = RunLocalTests on main, NoTestRun on sandbox)'
+        type: choice
+        options: [policy, NoTestRun, RunLocalTests, RunSpecifiedTests, RunAllTestsInOrg]
+        default: policy
+      tests:
+        description: 'Comma-separated Apex test classes (required with RunSpecifiedTests)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -13,6 +24,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'production' || 'sandbox' }}
     steps:
+      # workflow_dispatch can target any ref; deploys only ever run from the
+      # two branches that map to orgs, so refuse everything else
+      - name: Refuse refs that do not map to an org
+        if: github.ref_name != 'main' && github.ref_name != 'sandbox'
+        run: |
+          echo "::error::deploys run only from main or sandbox (got: $GITHUB_REF_NAME)"
+          exit 1
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
@@ -57,4 +76,29 @@ jobs:
           rm server.key
 
       - name: Deploy
-        run: pnpm exec sf project deploy start --target-org target-org --wait 30
+        env:
+          TEST_LEVEL: ${{ inputs.test-level || 'policy' }}
+          TESTS: ${{ inputs.tests }}
+        run: |
+          # Explicit test level so behaviour never rides on Salesforce defaults:
+          # production (main) runs local tests, sandbox runs none
+          if [ "$TEST_LEVEL" = "policy" ]; then
+            if [ "$GITHUB_REF_NAME" = "main" ]; then
+              TEST_LEVEL=RunLocalTests
+            else
+              TEST_LEVEL=NoTestRun
+            fi
+          fi
+          ARGS=(--test-level "$TEST_LEVEL")
+          if [ "$TEST_LEVEL" = "RunSpecifiedTests" ]; then
+            if [ -z "$TESTS" ]; then
+              echo "::error::the tests input is required with RunSpecifiedTests"
+              exit 1
+            fi
+            IFS=',' read -ra TEST_CLASSES <<<"$TESTS"
+            for t in "${TEST_CLASSES[@]}"; do
+              ARGS+=(--tests "$t")
+            done
+          fi
+          echo "Deploying with --test-level $TEST_LEVEL"
+          pnpm exec sf project deploy start --target-org target-org --wait 30 "${ARGS[@]}"

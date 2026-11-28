@@ -113,6 +113,17 @@ pnpm run deploy <sandbox名>
 
 いずれのブランチへの PR も CI で dry-run 検証（`pnpm exec sf project deploy start --dry-run`）を実行。
 
+### テストレベル
+
+デプロイは Salesforce のデフォルトに頼らず、Apex テストレベルを明示する。
+
+| ターゲット | テストレベル    |
+| ---------- | --------------- |
+| 本番       | `RunLocalTests` |
+| Sandbox    | `NoTestRun`     |
+
+インシデント時は Deploy ワークフローを手動実行（workflow_dispatch）し、テストレベルを上書きできる。`RunSpecifiedTests` とテストクラスのカンマ区切りリストの指定にも対応。
+
 ## プロジェクト構成
 
 ```text

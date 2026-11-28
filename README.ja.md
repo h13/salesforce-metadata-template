@@ -134,7 +134,6 @@ salesforce-metadata-template/
 ├── .github/workflows/
 │   ├── ci.yml                # PR バリデーション（dry-run deploy）
 │   ├── deploy.yml            # push 時の自動デプロイ
-│   ├── drift.yml             # 日次の org ドリフト検出
 │   └── sync-template.yml     # 週次テンプレート同期
 ├── docs/                     # セットアップドキュメント
 ├── sfdx-project.json         # Salesforce プロジェクト設定（API v67.0）
